@@ -1,0 +1,22 @@
+{
+  "name": "webssh",
+  "productName": "WebSSH",
+  "version": "0.1.0",
+  "author": "yingxin",
+  "description": "WebSSH Desktop",
+  "copyright": "Copyright © 2026 yingxin. Developed 2026-08-12",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "bin": "launch-browser.js",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node launch-browser.js",
+    "package:portable": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/build-portable.ps1"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "ssh2": "^1.17.0",
+    "ws": "^8.18.3"
+  }
+}

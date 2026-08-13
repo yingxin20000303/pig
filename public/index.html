@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WebSSH</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body data-theme="dark">
+  <main class="app-shell">
+    <div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
+    <aside id="connection-drawer" class="connection-panel" role="dialog" aria-modal="true" aria-labelledby="connection-drawer-title" aria-hidden="true">
+      <div class="connection-drawer-head"><div class="brand"><span id="connection-drawer-title">新建连接</span><small>WebSSH</small></div><button id="close-drawer-button" class="icon-button drawer-close-button" type="button" aria-label="关闭新建会话" title="关闭">×</button></div>
+      <section id="saved-connections-section" class="saved-connections-section" aria-labelledby="saved-connections-title" hidden>
+        <div class="drawer-divider" id="saved-connections-title" role="heading" aria-level="2"><span>保存连接</span></div>
+        <div id="profile-list" class="profile-list" aria-label="已保存的连接"></div>
+      </section>
+      <p id="profile-feedback" class="profile-feedback" role="status" hidden></p>
+      <div class="drawer-divider" role="separator" aria-hidden="true"><span>新建连接</span></div>
+      <form id="connection-form">
+        <label>名称<input name="name" placeholder="例如：生产服务器" autocomplete="off" required /></label>
+        <label>主机<input name="host" placeholder="example.com 或 192.168.1.10" required autocomplete="off" /></label>
+        <div class="two-columns">
+          <label>端口<input name="port" type="number" value="22" min="1" max="65535" required /></label>
+          <label>用户<input name="username" placeholder="root" required autocomplete="username" /></label>
+        </div>
+        <div class="tabs" role="tablist">
+          <button type="button" class="tab active" data-mode="password">密码</button>
+          <button type="button" class="tab" data-mode="key">私钥</button>
+        </div>
+        <div id="password-fields"><label>密码<div class="password-input-wrap"><input name="password" type="password" autocomplete="current-password" /><button class="password-visibility-toggle" type="button" data-password-toggle aria-label="显示密码" aria-pressed="false" title="显示密码"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5c-5.2 0-9.3 3.5-10.7 7 1.4 3.5 5.5 7 10.7 7s9.3-3.5 10.7-7C21.3 8.5 17.2 5 12 5Zm0 11.5a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9Zm0-2a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" /></svg></button></div></label></div>
+        <div id="key-fields" hidden>
+          <label>私钥内容<textarea name="privateKey" rows="6" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea></label>
+          <label>私钥口令（可选）<div class="password-input-wrap"><input name="passphrase" type="password" /><button class="password-visibility-toggle" type="button" data-password-toggle aria-label="显示私钥口令" aria-pressed="false" title="显示私钥口令"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5c-5.2 0-9.3 3.5-10.7 7 1.4 3.5 5.5 7 10.7 7s9.3-3.5 10.7-7C21.3 8.5 17.2 5 12 5Zm0 11.5a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9Zm0-2a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" /></svg></button></div></label>
+        </div>
+        <div class="connection-actions"><button id="save-profile-button" class="secondary-action icon-action" type="button" aria-label="保存连接" title="保存连接"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h12l3 3v15H4V4a1 1 0 0 1 1-1Zm2 2v5h9V5H7Zm-1 14h12v-7H6v7Zm3-5h6v3H9v-3Z" /></svg></button><button id="connect-button" class="connect-button" type="submit" aria-label="连接终端" title="连接终端">↗</button></div>
+      </form>
+    </aside>
+    <div id="file-picker-backdrop" class="file-picker-backdrop" hidden></div>
+    <section id="file-picker" class="file-picker" role="dialog" aria-modal="true" aria-labelledby="file-picker-title" hidden>
+      <header><div class="file-picker-heading"><span class="file-picker-icon">⇩</span><div><strong id="file-picker-title">下载文件</strong><small>选择当前目录中的文件保存到本机</small></div></div><button id="close-file-picker-button" class="icon-button" type="button" aria-label="关闭文件列表" title="关闭">×</button></header>
+      <form id="file-picker-directory-form" class="file-picker-directory"><input id="file-picker-directory-input" class="file-picker-path" type="text" inputmode="text" autocomplete="off" placeholder="请输入远程目录，例如 /home/user" aria-label="远程下载目录" required /><button type="submit">读取目录</button></form>
+      <div id="file-picker-list" class="file-picker-list"></div>
+    </section>
+    <div id="upload-picker-backdrop" class="file-picker-backdrop" hidden></div>
+    <section id="upload-picker" class="file-picker" role="dialog" aria-modal="true" aria-labelledby="upload-picker-title" hidden>
+      <header><div class="file-picker-heading"><span class="file-picker-icon">⇧</span><div><strong id="upload-picker-title">上传文件</strong><small>先确认远程目录，再选择要上传的本地文件</small></div></div><button id="close-upload-picker-button" class="icon-button" type="button" aria-label="关闭上传窗口" title="关闭">×</button></header>
+      <form id="upload-directory-form" class="file-picker-directory"><div class="upload-directory-field"><label for="upload-directory-input">远程上传目录 <small>目录需已存在且具有写入权限</small></label><input id="upload-directory-input" class="file-picker-path" type="text" inputmode="text" autocomplete="off" placeholder="例如 /home/user" aria-label="远程上传目录" required /></div><button type="submit"><span>选择目录</span></button></form>
+      <p id="upload-directory-error" class="upload-directory-error" role="alert" hidden></p>
+    </section>
+    <div id="upload-conflict-backdrop" class="file-picker-backdrop" hidden></div>
+    <section id="upload-conflict-dialog" class="upload-conflict-dialog" role="dialog" aria-modal="true" aria-labelledby="upload-conflict-title" hidden>
+      <header class="upload-conflict-header"><span class="upload-conflict-icon" aria-hidden="true">!</span><div><strong id="upload-conflict-title">上传冲突</strong></div></header>
+      <p class="upload-conflict-intro">目标目录中已有同名文件，请选择处理方式。</p>
+      <div id="upload-conflict-message" class="upload-conflict-file"></div>
+      <div class="upload-conflict-actions"><button id="upload-conflict-cancel" class="upload-conflict-cancel" type="button">取消</button><button id="upload-conflict-rename" class="upload-conflict-option" type="button"><span>重命名</span><small>保留原文件，创建新副本</small></button><button id="upload-conflict-overwrite" class="upload-conflict-option" type="button"><span>覆盖</span><small>替换远程原文件</small></button></div>
+    </section>
+    <section class="terminal-panel">
+      <header><div class="connection-status"><strong id="status-dot"></strong><span id="status">未连接</span><span id="connection-health" aria-live="polite"></span></div><div class="header-actions"><div class="terminal-settings"><button id="terminal-settings-button" class="icon-button" type="button" aria-label="终端字体设置" title="终端字体设置" aria-expanded="false">A</button><div id="terminal-settings-menu" class="terminal-settings-menu" hidden><label>字体大小 <output id="font-size-value">14px</output><input id="font-size-input" type="range" min="10" max="24" step="1" value="14" /></label><label>字体粗细 <output id="font-weight-value">400</output><input id="font-weight-input" type="range" min="100" max="900" step="1" value="400" /></label><label>字符间距 <output id="letter-spacing-value">0px</output><input id="letter-spacing-input" type="range" min="-2" max="8" step="0.1" value="0" /></label></div></div><button id="theme-button" class="icon-button" type="button" aria-label="切换主题" title="切换为浅色主题">☀</button><button id="upload-button" class="icon-button" type="button" aria-label="上传文件" title="上传文件">⇧</button><button id="download-button" class="icon-button" type="button" aria-label="下载文件" title="下载文件">⇩</button><button id="open-drawer-button" class="icon-button" type="button" aria-label="新建连接" title="新建连接">＋</button><button id="shutdown-button" class="icon-button shutdown-button" type="button" aria-label="关闭 WebSSH 服务" title="关闭 WebSSH 服务"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 2h2v10h-2V2Zm5.66 2.76 1.42 1.42A8 8 0 1 1 5.92 6.18l1.42-1.42A6 6 0 1 0 16.66 4.76Z" /></svg></button><input id="upload-input" type="file" hidden /></div></header>
+      <nav class="session-tabs" aria-label="SSH 会话"><div id="session-tabs" class="session-tabs-scroll" role="tablist"></div><button id="new-session-button" class="new-session-button" type="button" aria-label="新建连接" title="新建连接">＋</button></nav>
+      <div id="terminal" aria-live="polite">
+        <section id="terminal-empty-state" class="terminal-empty-state" aria-labelledby="terminal-empty-title">
+          <div class="terminal-empty-icon" aria-hidden="true">&gt;_</div>
+          <p class="terminal-empty-eyebrow">WEBSSH</p>
+          <h1 id="terminal-empty-title">开始一个纯粹的远程会话</h1>
+          <p class="terminal-empty-description">连接服务器后，即可在此使用 SSH 终端并管理文件传输。</p>
+          <button id="empty-state-connect-button" type="button"><span aria-hidden="true">＋</span> 新建连接</button>
+        </section>
+      </div>
+      <aside id="transfer-panel" class="transfer-panel" aria-live="polite"></aside>
+    </section>
+  </main>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
