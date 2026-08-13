@@ -1,0 +1,22 @@
+[common]
+display_name="WebSSH"
+desc="<p>Web SSH and SFTP management for fnOS with multi-session terminals, connection profiles, remote file browsing, uploads, and downloads. Runs as a native application without Docker and supports x86 and ARM devices.</p><p><strong>Security notice:</strong> Saved SSH passwords, private keys, and passphrases are sensitive. Do not expose this service directly to the public internet; use it only on a trusted LAN or through a VPN.</p>"
+
+[install]
+stepTitle="WebSSH access settings"
+helpText="Set the port for WebSSH. The application must be able to reach the target SSH/SFTP hosts."
+portLabel="WebSSH port"
+portMessage="Enter a WebSSH port."
+portFormatMessage="Enter a valid port number."
+portHelpText="Default: 1314. Ensure the port is not already in use."
+
+[uninstall]
+stepTitle="Confirm uninstall"
+helpText="Choose how to handle saved SSH connection profiles. Deleted data cannot be recovered."
+dataLabel="Connection profiles"
+keepData="Keep connection profiles"
+deleteData="Delete connection profiles"
+dataMessage="Choose how to handle connection profiles."
+
+[entry]
+title="WebSSH"

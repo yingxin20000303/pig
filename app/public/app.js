@@ -43,6 +43,17 @@ const uploadConflictMessage = document.querySelector('#upload-conflict-message')
 const uploadConflictOverwriteButton = document.querySelector('#upload-conflict-overwrite');
 const uploadConflictRenameButton = document.querySelector('#upload-conflict-rename');
 const uploadConflictCancelButton = document.querySelector('#upload-conflict-cancel');
+const shutdownConfirmDialog = document.querySelector('#shutdown-confirm-dialog');
+const shutdownConfirmBackdrop = document.querySelector('#shutdown-confirm-backdrop');
+const shutdownConfirmCancelButton = document.querySelector('#shutdown-confirm-cancel');
+const shutdownConfirmConfirmButton = document.querySelector('#shutdown-confirm-confirm');
+let shutdownConfirmResolver = null;
+const profileOverwriteDialog = document.querySelector('#profile-overwrite-dialog');
+const profileOverwriteBackdrop = document.querySelector('#profile-overwrite-backdrop');
+const profileOverwriteCancelButton = document.querySelector('#profile-overwrite-cancel');
+const profileOverwriteConfirmButton = document.querySelector('#profile-overwrite-confirm');
+const profileOverwriteDescription = document.querySelector('#profile-overwrite-description');
+let profileOverwriteResolver = null;
 const closeDrawerButton = document.querySelector('#close-drawer-button');
 const themeButton = document.querySelector('#theme-button');
 const terminalSettingsButton = document.querySelector('#terminal-settings-button');
@@ -64,13 +75,33 @@ let authMode = 'password';
 let profiles = [];
 let activeSessionId;
 let drawerTrigger;
+let editingSessionId = null;
 let uploadDirectoryValidation;
 const sessions = new Map();
 setInterval(() => refreshConnectionHealth(), 1000);
 
 const transfers = new Map();
 function updateEmptyState() { emptyState.hidden = sessions.size > 0; }
-function openFilePicker() { filePicker.hidden = false; filePickerBackdrop.hidden = false; }
+function refreshDownloadPickerList(session, directory) {
+  if (!session?.connected || session.socket.readyState !== WebSocket.OPEN) return;
+  if (!directory) return;
+  filePickerDirectoryInput.placeholder = '正在读取目录…';
+  filePickerList.replaceChildren();
+  const loading = document.createElement('div');
+  loading.className = 'file-picker-empty';
+  loading.textContent = '正在读取目录…';
+  filePickerList.append(loading);
+  session.socket.send(JSON.stringify({ type: 'list-files', directory }));
+}
+function openFilePicker() {
+  filePicker.hidden = false;
+  filePickerBackdrop.hidden = false;
+  const session = activeSession();
+  if (session?.home) {
+    filePickerDirectoryInput.value = session.home;
+    refreshDownloadPickerList(session, session.home);
+  }
+}
 function closeFilePicker() { filePicker.hidden = true; filePickerBackdrop.hidden = true; }
 function setUploadDirectoryError(message = '') {
   uploadDirectoryError.textContent = message;
@@ -93,7 +124,13 @@ function validateUploadDirectory() {
   setUploadDirectoryChecking(true);
   session.socket.send(JSON.stringify({ type: 'validate-upload-directory', requestId, directory }));
 }
-function openUploadPicker() { uploadPicker.hidden = false; uploadPickerBackdrop.hidden = false; uploadDirectoryInput.focus(); }
+function openUploadPicker(fillHome = true) {
+  uploadPicker.hidden = false;
+  uploadPickerBackdrop.hidden = false;
+  const session = activeSession();
+  if (fillHome && session?.home) uploadDirectoryInput.value = session.home;
+  uploadDirectoryInput.focus();
+}
 function closeUploadPicker() { uploadPicker.hidden = true; uploadPickerBackdrop.hidden = true; uploadDirectoryValidation = undefined; setUploadDirectoryChecking(false); setUploadDirectoryError(); }
 function openUploadConflict(session, message) {
   uploadConflictDialog.dataset.sessionId = session.id;
@@ -268,7 +305,28 @@ function closeDrawer() {
   drawerBackdrop.hidden = true;
   drawerTrigger?.focus?.();
 }
+function prepareEditSession(id) {
+  const session = sessions.get(id);
+  if (!session) return;
+  editingSessionId = id;
+  document.querySelector('#connection-drawer-title').textContent = '编辑连接';
+  const connection = session.connection || {};
+  form.reset();
+  form.elements.name.value = connection.name || '';
+  form.elements.host.value = connection.host || '';
+  form.elements.port.value = connection.port || 22;
+  form.elements.username.value = connection.username || '';
+  setAuthMode(connection.authMode || 'password');
+  form.elements.password.value = connection.password || '';
+  form.elements.privateKey.value = connection.privateKey || '';
+  form.elements.passphrase.value = connection.passphrase || '';
+  clearProfileSelection();
+  clearProfileFeedback();
+  openDrawer(session.tab);
+}
 function prepareNewConnection() {
+  editingSessionId = null;
+  document.querySelector('#connection-drawer-title').textContent = '新建连接';
   form.reset();
   form.elements.port.value = 22;
   clearProfileSelection();
@@ -374,6 +432,7 @@ function createSession(label = '新会话') {
   tab.className = 'session-tab';
   tab.setAttribute('role', 'tab');
   tab.tabIndex = 0;
+  tab.title = '单击切换会话，双击编辑连接';
   tab.innerHTML = '<span class="tab-label"></span><button class="tab-close" type="button" aria-label="关闭会话" title="关闭会话">×</button>';
   tab.querySelector('.tab-label').textContent = label;
   sessionTabs.append(tab);
@@ -384,7 +443,7 @@ function createSession(label = '新会话') {
   const fitAddon = new FitAddon();
   terminal.loadAddon(fitAddon);
   terminal.open(mount);
-  const session = { id, host, mount, tab, terminal, fitAddon, socket: { readyState: WebSocket.CLOSED }, connected: false, connectedAt: undefined, health: undefined, downloads: new Map(), uploads: new Map(), reconnectTimer: undefined, reconnectAttempts: 0, manuallyClosed: false };
+  const session = { id, host, mount, tab, terminal, fitAddon, socket: { readyState: WebSocket.CLOSED }, connected: false, connectedAt: undefined, health: undefined, home: undefined, downloads: new Map(), uploads: new Map(), reconnectTimer: undefined, reconnectAttempts: 0, manuallyClosed: false };
   sessions.set(id, session);
   updateEmptyState();
   terminal.onData((data) => {
@@ -408,6 +467,10 @@ function createSession(label = '新会话') {
   tab.addEventListener('click', (event) => {
     if (event.target.closest('.tab-close')) return;
     activateSession(id);
+  });
+  tab.addEventListener('dblclick', (event) => {
+    if (event.target.closest('.tab-close')) return;
+    prepareEditSession(id);
   });
   tab.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); activateSession(id); }
@@ -481,6 +544,7 @@ function establishConnection(session, values) {
   session.connection = { ...values, authMode: mode, password: mode === 'password' ? values.password : '', privateKey: mode === 'key' ? values.privateKey : '' };
   session.connected = false;
   session.tab.querySelector('.tab-label').textContent = values.name || values.host;
+  updateSessionTabsOverflow();
   session.terminal.clear();
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   session.socket = new WebSocket(`${protocol}//${location.host}/ssh`);
@@ -494,9 +558,11 @@ function establishConnection(session, values) {
       session.connected = true;
       session.connectedAt = Date.now();
       session.health = undefined;
+      session.home = undefined;
       session.reconnectAttempts = 0;
       if (session.id === activeSessionId) { refreshActiveStatus(); fitSession(session); session.terminal.focus(); }
     }
+    if (message.type === 'home') session.home = message.home;
     if (message.type === 'health') {
       session.health = message;
       if (session.id === activeSessionId) refreshConnectionHealth();
@@ -563,7 +629,7 @@ function establishConnection(session, values) {
         removeTransfer(message.id, element);
         setUploadDirectoryError(message.message);
         uploadDirectoryInput.value = upload.directory;
-        openUploadPicker();
+        openUploadPicker(false);
         uploadDirectoryInput.focus();
       } else updateTransfer(message.id || crypto.randomUUID(), { direction: message.direction || 'upload', name: transfers.get(message.id)?.name || '文件传输', error: message.message });
     }
@@ -606,9 +672,28 @@ function connect(closeAfterConnect = true) {
   const values = Object.fromEntries(new FormData(form));
   if (authMode === 'password' && !values.password) return showProfileFeedback('请输入密码。', 'error');
   if (authMode === 'key' && !values.privateKey) return showProfileFeedback('请输入私钥内容。', 'error');
-  const session = createSession(values.name || values.host);
-  session.terminal.clear();
-  establishConnection(session, values);
+  const editingSession = editingSessionId ? sessions.get(editingSessionId) : undefined;
+  if (editingSession) {
+    const previous = editingSession.connection || {};
+    const mode = values.authMode || authMode;
+    const next = { ...values, authMode: mode, password: mode === 'password' ? values.password : '', privateKey: mode === 'key' ? values.privateKey : '' };
+    const connectionFields = ['host', 'port', 'username', 'authMode', 'password', 'privateKey', 'passphrase'];
+    const changed = connectionFields.some((key) => String(next[key] ?? '') !== String(previous[key] ?? ''));
+    editingSessionId = null;
+    document.querySelector('#connection-drawer-title').textContent = '新建连接';
+    if (changed) {
+      editingSession.terminal.clear();
+      establishConnection(editingSession, values);
+    } else {
+      editingSession.connection = next;
+      editingSession.tab.querySelector('.tab-label').textContent = next.name || next.host;
+      updateSessionTabsOverflow();
+    }
+  } else {
+    const session = createSession(values.name || values.host);
+    session.terminal.clear();
+    establishConnection(session, values);
+  }
   if (closeAfterConnect) closeDrawer();
 }
 
@@ -623,12 +708,53 @@ document.querySelectorAll('[data-password-toggle]').forEach((button) => button.a
   button.title = `${visible ? '隐藏' : '显示'}${fieldName}`;
 }));
 themeButton.addEventListener('click', () => applyTheme(document.body.dataset.theme === 'dark' ? 'light' : 'dark'));
+function openShutdownConfirm() {
+  shutdownConfirmDialog.hidden = false;
+  shutdownConfirmBackdrop.hidden = false;
+  shutdownConfirmCancelButton.focus();
+  return new Promise((resolve) => { shutdownConfirmResolver = resolve; });
+}
+function closeShutdownConfirm(result) {
+  shutdownConfirmDialog.hidden = true;
+  shutdownConfirmBackdrop.hidden = true;
+  if (shutdownConfirmResolver) {
+    shutdownConfirmResolver(result);
+    shutdownConfirmResolver = null;
+  }
+}
+shutdownConfirmCancelButton.addEventListener('click', () => closeShutdownConfirm(false));
+shutdownConfirmConfirmButton.addEventListener('click', () => closeShutdownConfirm(true));
+shutdownConfirmBackdrop.addEventListener('click', () => closeShutdownConfirm(false));
+document.addEventListener('keydown', (event) => {
+  if (!shutdownConfirmDialog.hidden && event.key === 'Escape') closeShutdownConfirm(false);
+});
+function openProfileOverwrite(description) {
+  profileOverwriteDescription.textContent = description;
+  profileOverwriteDialog.hidden = false;
+  profileOverwriteBackdrop.hidden = false;
+  profileOverwriteCancelButton.focus();
+  return new Promise((resolve) => { profileOverwriteResolver = resolve; });
+}
+function closeProfileOverwrite(result) {
+  profileOverwriteDialog.hidden = true;
+  profileOverwriteBackdrop.hidden = true;
+  if (profileOverwriteResolver) {
+    profileOverwriteResolver(result);
+    profileOverwriteResolver = null;
+  }
+}
+profileOverwriteCancelButton.addEventListener('click', () => closeProfileOverwrite(false));
+profileOverwriteConfirmButton.addEventListener('click', () => closeProfileOverwrite(true));
+profileOverwriteBackdrop.addEventListener('click', () => closeProfileOverwrite(false));
+document.addEventListener('keydown', (event) => {
+  if (!profileOverwriteDialog.hidden && event.key === 'Escape') closeProfileOverwrite(false);
+});
 shutdownButton.addEventListener('click', async () => {
-  if (!window.confirm('确定关闭 WebSSH 服务吗？所有 SSH 会话将断开。')) return;
+  if (!(await openShutdownConfirm())) return;
   shutdownButton.disabled = true;
   try {
     await fetch('/api/shutdown', { method: 'POST' });
-    document.body.innerHTML = '<main class="service-stopped"><h1>WebSSH 服务已关闭</h1><p>可关闭此浏览器页面；再次双击 WebSSH.exe 即可重新启动。</p></main>';
+    document.body.innerHTML = '<main class="service-stopped"><svg class="service-stopped-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg><p class="service-stopped-eyebrow">SERVICE OFFLINE</p><h1>WebSSH 服务已关闭</h1><p class="service-stopped-description">可关闭此浏览器页面；如需重新启动，请在您所在平台的部署环境中重新启动 WebSSH 服务。</p></main>';
   } catch {
     window.close();
   }
@@ -667,7 +793,6 @@ closeDrawerButton.addEventListener('click', closeDrawer);
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && drawer.classList.contains('open')) closeDrawer(); });
 uploadButton.addEventListener('click', () => {
   if (!activeSession()?.connected) return activeSession()?.terminal.writeln('\r\n\x1b[31m请先连接 SSH 会话。\x1b[0m');
-  uploadDirectoryInput.value = '';
   setUploadDirectoryError();
   openUploadPicker();
 });
@@ -692,7 +817,7 @@ uploadInput.addEventListener('change', () => {
   session.uploads.set(id, { file, directory });
   session.socket.send(JSON.stringify({ type: 'upload-start', id, name: file.name, size: file.size, directory }));
 });
-downloadButton.addEventListener('click', () => { const session = activeSession(); if (!session?.connected) return session?.terminal.writeln('\r\n\x1b[31m请先连接 SSH 会话。\x1b[0m'); filePickerDirectoryInput.value = ''; filePickerDirectoryInput.placeholder = '请输入远程目录，例如 /home/user'; filePickerList.replaceChildren(); openFilePicker(); filePickerDirectoryInput.focus(); });
+downloadButton.addEventListener('click', () => { const session = activeSession(); if (!session?.connected) return session?.terminal.writeln('\r\n\x1b[31m请先连接 SSH 会话。\x1b[0m'); filePickerDirectoryInput.placeholder = '请输入远程目录，例如 /home/user'; filePickerList.replaceChildren(); openFilePicker(); filePickerDirectoryInput.focus(); });
 filePickerDirectoryForm.addEventListener('submit', (event) => {
   event.preventDefault();
   const session = activeSession();
@@ -716,7 +841,7 @@ saveProfileButton.addEventListener('click', async () => {
   const values = Object.fromEntries(new FormData(form));
   const profile = { name: values.name.trim(), host: values.host, port: values.port, username: values.username, authMode, password: authMode === 'password' ? values.password : '', privateKey: authMode === 'key' ? values.privateKey : '', passphrase: authMode === 'key' ? values.passphrase : '' };
   const existing = profiles.find((item) => profileId(item) === profileId(profile));
-  if (existing && !window.confirm(`“${profile.name}”已存在，是否覆盖？`)) return;
+  if (existing && !(await openProfileOverwrite(`主机 ${profile.host}:${profile.port} 已存在同名配置，是否覆盖？`))) return;
   try {
     const response = await fetch('/api/profiles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(profile) });
     const result = await response.json();

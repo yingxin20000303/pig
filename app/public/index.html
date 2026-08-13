@@ -40,7 +40,7 @@
     <div id="file-picker-backdrop" class="file-picker-backdrop" hidden></div>
     <section id="file-picker" class="file-picker" role="dialog" aria-modal="true" aria-labelledby="file-picker-title" hidden>
       <header><div class="file-picker-heading"><span class="file-picker-icon">⇩</span><div><strong id="file-picker-title">下载文件</strong><small>选择当前目录中的文件保存到本机</small></div></div><button id="close-file-picker-button" class="icon-button" type="button" aria-label="关闭文件列表" title="关闭">×</button></header>
-      <form id="file-picker-directory-form" class="file-picker-directory"><input id="file-picker-directory-input" class="file-picker-path" type="text" inputmode="text" autocomplete="off" placeholder="请输入远程目录，例如 /home/user" aria-label="远程下载目录" required /><button type="submit">读取目录</button></form>
+      <form id="file-picker-directory-form" class="file-picker-directory"><input id="file-picker-directory-input" class="file-picker-path" type="text" inputmode="text" autocomplete="off" placeholder="请输入远程目录，例如 /home/user" aria-label="远程下载目录" /><button type="submit">读取目录</button></form>
       <div id="file-picker-list" class="file-picker-list"></div>
     </section>
     <div id="upload-picker-backdrop" class="file-picker-backdrop" hidden></div>
@@ -55,6 +55,26 @@
       <p class="upload-conflict-intro">目标目录中已有同名文件，请选择处理方式。</p>
       <div id="upload-conflict-message" class="upload-conflict-file"></div>
       <div class="upload-conflict-actions"><button id="upload-conflict-cancel" class="upload-conflict-cancel" type="button">取消</button><button id="upload-conflict-rename" class="upload-conflict-option" type="button"><span>重命名</span><small>保留原文件，创建新副本</small></button><button id="upload-conflict-overwrite" class="upload-conflict-option" type="button"><span>覆盖</span><small>替换远程原文件</small></button></div>
+    </section>
+    <div id="shutdown-confirm-backdrop" class="shutdown-confirm-backdrop" hidden></div>
+    <section id="shutdown-confirm-dialog" class="shutdown-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="shutdown-confirm-title" hidden>
+      <span class="shutdown-confirm-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg></span>
+      <div class="shutdown-confirm-body">
+        <span class="shutdown-confirm-eyebrow">SERVICE SHUTDOWN</span>
+        <strong id="shutdown-confirm-title">确定关闭 WebSSH 服务吗？</strong>
+        <p id="shutdown-confirm-description">所有 SSH 会话将断开，且无法恢复。请确认您已保存好相关操作。</p>
+      </div>
+      <div class="shutdown-confirm-actions"><button id="shutdown-confirm-cancel" class="shutdown-confirm-cancel" type="button">取消</button><button id="shutdown-confirm-confirm" class="shutdown-confirm-confirm" type="button">确认关闭</button></div>
+    </section>
+    <div id="profile-overwrite-backdrop" class="shutdown-confirm-backdrop" hidden></div>
+    <section id="profile-overwrite-dialog" class="shutdown-confirm-dialog profile-overwrite-dialog" role="dialog" aria-modal="true" aria-labelledby="profile-overwrite-title" hidden>
+      <span class="shutdown-confirm-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h12"/><path d="M10 3l4 4-4 4"/><path d="M4 17h12"/><path d="M10 13l4 4-4 4"/></svg></span>
+      <div class="shutdown-confirm-body">
+        <span class="shutdown-confirm-eyebrow">PROFILE CONFLICT</span>
+        <strong id="profile-overwrite-title">连接配置已存在</strong>
+        <p id="profile-overwrite-description"></p>
+      </div>
+      <div class="shutdown-confirm-actions"><button id="profile-overwrite-cancel" class="shutdown-confirm-cancel" type="button">取消</button><button id="profile-overwrite-confirm" class="shutdown-confirm-confirm" type="button">覆盖</button></div>
     </section>
     <section class="terminal-panel">
       <header><div class="connection-status"><strong id="status-dot"></strong><span id="status">未连接</span><span id="connection-health" aria-live="polite"></span></div><div class="header-actions"><div class="terminal-settings"><button id="terminal-settings-button" class="icon-button" type="button" aria-label="终端字体设置" title="终端字体设置" aria-expanded="false">A</button><div id="terminal-settings-menu" class="terminal-settings-menu" hidden><label>字体大小 <output id="font-size-value">14px</output><input id="font-size-input" type="range" min="10" max="24" step="1" value="14" /></label><label>字体粗细 <output id="font-weight-value">400</output><input id="font-weight-input" type="range" min="100" max="900" step="1" value="400" /></label><label>字符间距 <output id="letter-spacing-value">0px</output><input id="letter-spacing-input" type="range" min="-2" max="8" step="0.1" value="0" /></label></div></div><button id="theme-button" class="icon-button" type="button" aria-label="切换主题" title="切换为浅色主题">☀</button><button id="upload-button" class="icon-button" type="button" aria-label="上传文件" title="上传文件">⇧</button><button id="download-button" class="icon-button" type="button" aria-label="下载文件" title="下载文件">⇩</button><button id="open-drawer-button" class="icon-button" type="button" aria-label="新建连接" title="新建连接">＋</button><button id="shutdown-button" class="icon-button shutdown-button" type="button" aria-label="关闭 WebSSH 服务" title="关闭 WebSSH 服务"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 2h2v10h-2V2Zm5.66 2.76 1.42 1.42A8 8 0 1 1 5.92 6.18l1.42-1.42A6 6 0 1 0 16.66 4.76Z" /></svg></button><input id="upload-input" type="file" hidden /></div></header>

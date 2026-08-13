@@ -1,0 +1,13 @@
+{
+  ".url": {
+    "webssh.proxy.Application": {
+      "title": "${entry.title}",
+      "icon": "images/icon_{0}.png",
+      "type": "url",
+      "protocol": "http",
+      "port": "${wizard_webssh_http_port}",
+      "url": "/",
+      "allUsers": true
+    }
+  }
+}

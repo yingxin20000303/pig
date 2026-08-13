@@ -1,0 +1,5 @@
+#!/bin/bash
+
+echo "wizard_webssh_http_port=${wizard_webssh_http_port:-1314}" > "${TRIM_PKGETC}/settings.conf"
+
+exit 0

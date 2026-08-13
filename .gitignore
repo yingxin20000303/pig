@@ -17,6 +17,15 @@ id_ed25519
 server-output.log
 server-error.log
 
+# fnOS packaging tools and artifacts
+tools/
+dist/fnos/
+fnos/webssh/app/server/
+*.fpk
+
+# AI-generated preview images
+generated-images/
+
 # Local IDE and operating-system files
 .codebuddy/
 .vscode/

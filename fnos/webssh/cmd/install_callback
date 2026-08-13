@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# 持久化安装向导中的端口到 settings.conf，供 cmd/main 启动时读取
+echo "wizard_webssh_http_port=${wizard_webssh_http_port:-1314}" > "${TRIM_PKGETC}/settings.conf"
+
+DATA_DIR="${TRIM_DATA_SHARE_PATHS%%:*}"
+mkdir -p "${DATA_DIR}"
+if [ ! -f "${DATA_DIR}/ssh-connections.json" ]; then
+    echo "[]" > "${DATA_DIR}/ssh-connections.json"
+fi
+chown -R "${TRIM_USERNAME}:${TRIM_USERNAME}" "${DATA_DIR}" 2>/dev/null || true
+
+exit 0

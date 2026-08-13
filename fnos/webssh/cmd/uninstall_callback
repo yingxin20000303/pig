@@ -1,0 +1,9 @@
+#!/bin/bash
+
+# 根据卸载向导选择：仅删除数据或保留数据
+if [ "${wizard_data_action}" = "delete" ]; then
+    DATA_DIR="${TRIM_DATA_SHARE_PATHS%%:*}"
+    rm -rf "${DATA_DIR}"
+fi
+
+exit 0

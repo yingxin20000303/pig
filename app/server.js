@@ -11,7 +11,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 app.disable('x-powered-by');
 app.use(express.json({ limit: '64kb' }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
+}));
 
 const profilesPath = process.env.WEBSSH_PROFILES_PATH || path.join(__dirname, 'ssh-connections.json');
 const profileFields = ['name', 'host', 'port', 'username', 'authMode', 'password', 'privateKey', 'passphrase'];
@@ -165,6 +171,15 @@ wss.on('connection', (ws) => {
           shell = stream;
           connected = true;
           send(ws, { type: 'ready' });
+          ssh.exec('printf "$HOME"', (homeError, homeStream) => {
+            if (homeError || !homeStream) return;
+            let home = '';
+            homeStream.on('data', (data) => { home += data.toString('utf8'); });
+            homeStream.on('close', () => {
+              home = home.trim();
+              if (home) send(ws, { type: 'home', home });
+            });
+          });
           const collectHealth = () => {
             if (!connected || !ssh) return;
             const startedAt = Date.now();
@@ -317,18 +332,18 @@ wss.on('connection', (ws) => {
       return;
     }
     if (message.type === 'list-files') {
-      if (!sftp) return send(ws, { type: 'transfer-error', operation: 'list-files', message: 'SFTP 尚未就绪。' });
+      if (!sftp) return send(ws, { type: 'transfer-error', operation: 'list-files', picker: message.picker, message: 'SFTP 尚未就绪。' });
       const requestedDirectory = String(message.directory || '').trim();
       const listDirectory = (currentPath, displayPath = currentPath) => {
         sftp.readdir(currentPath, (readError, entries) => {
-          if (readError) return send(ws, { type: 'transfer-error', operation: 'list-files', message: `无法读取目录“${displayPath}”：${readError.message}` });
+          if (readError) return send(ws, { type: 'transfer-error', operation: 'list-files', picker: message.picker, message: `无法读取目录“${displayPath}”：${readError.message}` });
           const normalizedPath = currentPath === '/' ? '/' : currentPath.replace(/\/+$/, '');
           const files = entries.filter((entry) => !entry.attrs.isDirectory()).map((entry) => ({ name: entry.filename, path: path.posix.join(normalizedPath, entry.filename), size: entry.attrs.size }));
-          send(ws, { type: 'file-list', path: displayPath, files });
+          send(ws, { type: 'file-list', picker: message.picker, path: displayPath, files });
         });
       };
       const directory = resolveUserDirectory(requestedDirectory);
-      if (!directory) return send(ws, { type: 'transfer-error', operation: 'list-files', message: '请输入要读取的远程目录。' });
+      if (!directory) return send(ws, { type: 'transfer-error', operation: 'list-files', picker: message.picker, message: '请输入要读取的远程目录。' });
       listDirectory(directory, directory);
       return;
     }

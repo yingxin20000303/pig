@@ -1,0 +1,28 @@
+[
+  {
+    "stepTitle": "${install.stepTitle}",
+    "items": [
+      {
+        "type": "tips",
+        "helpText": "${install.helpText}"
+      },
+      {
+        "type": "text",
+        "field": "wizard_webssh_http_port",
+        "label": "${install.portLabel}",
+        "initValue": "1314",
+        "rules": [
+          {
+            "required": true,
+            "message": "${install.portMessage}"
+          },
+          {
+            "pattern": "^[1-9][0-9]{0,4}$",
+            "message": "${install.portFormatMessage}"
+          }
+        ],
+        "helpText": "${install.portHelpText}"
+      }
+    ]
+  }
+]

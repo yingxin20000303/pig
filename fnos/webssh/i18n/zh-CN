@@ -1,0 +1,22 @@
+[common]
+display_name="WebSSH"
+desc="<p>面向飞牛 fnOS 的 Web SSH 与 SFTP 管理工具，支持多会话终端、连接配置、远程文件浏览、上传和下载。原生应用运行，不依赖 Docker，支持 x86 与 ARM 设备。</p><p><strong>安全提示：</strong>应用保存的 SSH 密码、私钥和口令属于敏感信息。请勿将此服务直接暴露到公网；推荐仅在可信局域网或 VPN 环境中使用。</p>"
+
+[install]
+stepTitle="WebSSH 访问设置"
+helpText="设置 WebSSH 的访问端口。应用需要能够连接到目标 SSH/SFTP 主机。"
+portLabel="WebSSH 端口"
+portMessage="请输入 WebSSH 端口。"
+portFormatMessage="请输入有效的端口号。"
+portHelpText="默认 1314。请确保该端口未被其他应用占用。"
+
+[uninstall]
+stepTitle="确认卸载"
+helpText="请选择卸载后如何处理已保存的 SSH 连接配置。删除后无法恢复。"
+dataLabel="连接配置"
+keepData="保留连接配置"
+deleteData="删除连接配置"
+dataMessage="请选择连接配置处理方式。"
+
+[entry]
+title="WebSSH"
