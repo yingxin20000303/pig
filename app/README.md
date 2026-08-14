@@ -72,7 +72,7 @@ docker compose down -v
 ### 使用 docker run
 
 ```bash
-docker build -t webssh:0.1.0 .
+docker build -t webssh:0.1.1 .
 docker volume create webssh-data
 docker run -d \
   --name webssh \
@@ -82,7 +82,7 @@ docker run -d \
   -e WEBSSH_HOST=0.0.0.0 \
   -e WEBSSH_PROFILES_PATH=/data/ssh-connections.json \
   -v webssh-data:/data \
-  webssh:0.1.0
+  webssh:0.1.1
 ```
 
 ### 环境变量
@@ -106,7 +106,7 @@ Docker Buildx 可发布 `linux/amd64` 与 `linux/arm64` 镜像：
 ```bash
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
-  --tag <registry>/<namespace>/webssh:0.1.0 \
+  --tag <registry>/<namespace>/webssh:0.1.1 \
   --tag <registry>/<namespace>/webssh:latest \
   --push \
   .
@@ -136,7 +136,7 @@ dist\WebSSH-Portable\WebSSH.exe
 同时会打包出统一命名的分发资产（含操作系统标识）：
 
 ```text
-dist\WebSSH-0.1.0-Windows.zip
+dist\WebSSH-0.1.1-Windows.zip
 ```
 
 ## 连接配置与安全

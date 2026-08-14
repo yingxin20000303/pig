@@ -11,7 +11,7 @@
 | --- | --- |
 | 应用名称 | WebSSH |
 | 应用包名（appname） | `webssh` |
-| 版本号 | 0.1.0 |
+| 版本号 | 0.1.1 |
 | 分类 | 工具 / 网络 |
 | 开发者 | yingxin |
 | 维护者（maintainer） | yingxin |
@@ -56,6 +56,10 @@
 ### 更新日志（changelog）
 
 ```
+v0.1.1
+- 修复操作栏遮挡弹窗、标签栏进入会话残留首页内容等界面问题
+- 背景透明度统一由背景设置滑条控制，深浅色模式背景全局生效
+- 新增终端字体颜色自定义与背景状态提示
 v0.1.0
 - Initial release
 - Multi-session SSH terminal with SFTP file transfer
@@ -104,7 +108,7 @@ v0.1.0
 1. 登录 https://account.fnnas.com/ 注册飞牛账号
 2. 访问 https://developer.fnnas.com/ → 「我的应用」完成开发者认证
 3. 创建应用，填写基本信息、描述与上传截图
-4. 上传 `dist/fnos/WebSSH-0.1.0-fnOS.fpk`
+4. 上传 `dist/fnos/WebSSH-0.1.1-fnOS.fpk`
 5. 提交审核，等待官方反馈（如需补充材料按提示补齐）
 6. 审核通过后应用正式上架
 

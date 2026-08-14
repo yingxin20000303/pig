@@ -11,7 +11,6 @@ const newSessionButton = document.querySelector('#new-session-button');
 const statusElement = document.querySelector('#status');
 const statusDot = document.querySelector('#status-dot');
 const connectionHealth = document.querySelector('#connection-health');
-const connectButton = document.querySelector('#connect-button');
 const passwordFields = document.querySelector('#password-fields');
 const keyFields = document.querySelector('#key-fields');
 const profileList = document.querySelector('#profile-list');
@@ -60,15 +59,26 @@ const terminalSettingsButton = document.querySelector('#terminal-settings-button
 const terminalSettingsMenu = document.querySelector('#terminal-settings-menu');
 const fontSizeInput = document.querySelector('#font-size-input');
 const fontSizeValue = document.querySelector('#font-size-value');
+const backgroundSettingsButton = document.querySelector('#background-settings-button');
+const backgroundSettingsMenu = document.querySelector('#background-settings-menu');
+const backgroundUploadButton = document.querySelector('#background-upload-button');
+const backgroundFileInput = document.querySelector('#background-file-input');
+const backgroundOpacityInput = document.querySelector('#background-opacity-input');
+const backgroundOpacityValue = document.querySelector('#background-opacity-value');
+const backgroundRemoveButton = document.querySelector('#background-remove-button');
 const fontWeightInput = document.querySelector('#font-weight-input');
 const fontWeightValue = document.querySelector('#font-weight-value');
 const letterSpacingInput = document.querySelector('#letter-spacing-input');
 const letterSpacingValue = document.querySelector('#letter-spacing-value');
+const fontColorInput = document.querySelector('#font-color-input');
+const fontColorValue = document.querySelector('#font-color-value');
+const backgroundStatusDot = document.querySelector('#background-status-dot');
 
 const terminalFontSettings = {
   fontSize: Math.min(24, Math.max(10, Number(localStorage.getItem('webssh-font-size')) || 14)),
   fontWeight: Math.min(900, Math.max(100, Number(localStorage.getItem('webssh-font-weight')) || 400)),
-  letterSpacing: Math.min(8, Math.max(-2, Number(localStorage.getItem('webssh-letter-spacing')) || 0))
+  letterSpacing: Math.min(8, Math.max(-2, Number(localStorage.getItem('webssh-letter-spacing')) || 0)),
+  foreground: localStorage.getItem('webssh-font-color') || null
 };
 
 let authMode = 'password';
@@ -263,29 +273,68 @@ function applyTerminalFontSettings() {
   fontWeightValue.textContent = terminalFontSettings.fontWeight;
   letterSpacingInput.value = terminalFontSettings.letterSpacing;
   letterSpacingValue.textContent = `${terminalFontSettings.letterSpacing}px`;
+  fontColorInput.value = effectiveTerminalForeground();
+  fontColorValue.textContent = effectiveTerminalForeground();
   localStorage.setItem('webssh-font-size', terminalFontSettings.fontSize);
   localStorage.setItem('webssh-font-weight', terminalFontSettings.fontWeight);
   localStorage.setItem('webssh-letter-spacing', terminalFontSettings.letterSpacing);
+  if (terminalFontSettings.foreground) localStorage.setItem('webssh-font-color', terminalFontSettings.foreground);
   sessions.forEach((session) => {
     session.terminal.options.fontSize = terminalFontSettings.fontSize;
     session.terminal.options.fontWeight = terminalFontSettings.fontWeight;
     session.terminal.options.letterSpacing = terminalFontSettings.letterSpacing;
+    session.terminal.options.theme = buildTerminalTheme();
     requestAnimationFrame(() => fitSession(session));
   });
+}
+const TERMINAL_THEMES = {
+  light: { foreground: '#172033', cursor: '#0369a1', selectionBackground: '#bae6fd' },
+  dark: { foreground: '#d8e3f1', cursor: '#7dd3fc', selectionBackground: '#155e75' }
+};
+const TERMINAL_BG_RGB = { light: '251, 253, 255', dark: '11, 18, 32' };
+function effectiveTerminalForeground() {
+  return terminalFontSettings.foreground || TERMINAL_THEMES[document.body.dataset.theme === 'light' ? 'light' : 'dark'].foreground;
+}
+function buildTerminalTheme() {
+  const isLight = document.body.dataset.theme === 'light';
+  return { background: `rgba(${TERMINAL_BG_RGB[isLight ? 'light' : 'dark']}, ${backgroundState.opacity})`, ...TERMINAL_THEMES[isLight ? 'light' : 'dark'], foreground: effectiveTerminalForeground() };
 }
 function applyTheme(theme) {
   const isLight = theme === 'light';
   document.body.dataset.theme = isLight ? 'light' : 'dark';
+  document.documentElement.dataset.theme = isLight ? 'light' : 'dark';
   localStorage.setItem('webssh-theme', document.body.dataset.theme);
   themeButton.textContent = isLight ? '☾' : '☀';
   themeButton.title = isLight ? '切换为深色主题' : '切换为浅色主题';
   themeButton.setAttribute('aria-label', themeButton.title);
   sessions.forEach((session) => {
-    session.terminal.options.theme = isLight
-      ? { background: '#f8fafc', foreground: '#172033', cursor: '#0369a1', selectionBackground: '#bae6fd' }
-      : { background: '#0b1220', foreground: '#d8e3f1', cursor: '#7dd3fc', selectionBackground: '#155e75' };
+    session.terminal.options.theme = buildTerminalTheme();
   });
 }
+let backgroundState = { url: null, opacity: 0.5 };
+
+function applyBackground() {
+  document.body.style.setProperty('--webssh-bg-url', backgroundState.url ? `url("${backgroundState.url}")` : 'none');
+  document.body.style.setProperty('--webssh-bg-opacity', String(backgroundState.opacity));
+  const percent = String(Math.round(backgroundState.opacity * 100));
+  backgroundOpacityInput.value = percent;
+  backgroundOpacityValue.value = `${percent}%`;
+  backgroundRemoveButton.disabled = !backgroundState.url;
+  backgroundStatusDot.dataset.hasBg = String(Boolean(backgroundState.url));
+  sessions.forEach((session) => { session.terminal.options.theme = buildTerminalTheme(); });
+}
+
+async function loadBackground() {
+  try {
+    const response = await fetch('/api/background');
+    if (!response.ok) return;
+    backgroundState = await response.json();
+    applyBackground();
+  } catch {
+    /* 保持默认背景 */
+  }
+}
+
 function showProfileFeedback(message, type = 'success') {
   profileFeedback.textContent = message;
   profileFeedback.dataset.type = type;
@@ -329,6 +378,7 @@ function prepareNewConnection() {
   document.querySelector('#connection-drawer-title').textContent = '新建连接';
   form.reset();
   form.elements.port.value = 22;
+  form.elements.username.value = 'root';
   clearProfileSelection();
   clearProfileFeedback();
   setAuthMode('password');
@@ -375,7 +425,6 @@ function refreshConnectionHealth() {
 function setStatus(text, connected = false) {
   statusElement.textContent = text;
   statusDot.classList.toggle('connected', connected);
-  connectButton.disabled = false;
   if (!connected) connectionHealth.replaceChildren();
 }
 function refreshActiveStatus() {
@@ -400,6 +449,7 @@ function activateSession(id) {
   });
   sessions.get(id).tab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
   refreshActiveStatus();
+  updateEmptyState();
   requestAnimationFrame(() => { fitSession(activeSession()); activeSession()?.terminal.focus(); });
 }
 function closeSession(id) {
@@ -438,8 +488,7 @@ function createSession(label = '新会话') {
   sessionTabs.append(tab);
   updateSessionTabsOverflow();
   terminalArea.append(host);
-  const isLight = document.body.dataset.theme === 'light';
-  const terminal = new Terminal({ cursorBlink: true, fontFamily: 'Cascadia Code, Consolas, monospace', fontSize: terminalFontSettings.fontSize, fontWeight: terminalFontSettings.fontWeight, letterSpacing: terminalFontSettings.letterSpacing, theme: isLight ? { background: '#f8fafc', foreground: '#172033', cursor: '#0369a1', selectionBackground: '#bae6fd' } : { background: '#0b1220', foreground: '#d8e3f1', cursor: '#7dd3fc', selectionBackground: '#155e75' } });
+  const terminal = new Terminal({ cursorBlink: true, fontFamily: 'Cascadia Code, Consolas, monospace', fontSize: terminalFontSettings.fontSize, fontWeight: terminalFontSettings.fontWeight, letterSpacing: terminalFontSettings.letterSpacing, theme: buildTerminalTheme() });
   const fitAddon = new FitAddon();
   terminal.loadAddon(fitAddon);
   terminal.open(mount);
@@ -467,6 +516,7 @@ function createSession(label = '新会话') {
   tab.addEventListener('click', (event) => {
     if (event.target.closest('.tab-close')) return;
     activateSession(id);
+    connectPending(session);
   });
   tab.addEventListener('dblclick', (event) => {
     if (event.target.closest('.tab-close')) return;
@@ -496,6 +546,14 @@ function renderProfiles(selectedId = '') {
       selectButton.textContent = profile.name;
       selectButton.title = `使用 ${profile.name} 填充连接信息`;
       selectButton.addEventListener('click', () => { clearProfileSelection(); item.classList.add('active'); fillProfile(profile); clearProfileFeedback(); });
+      const pinButton = document.createElement('button');
+      pinButton.type = 'button';
+      pinButton.className = 'saved-profile-pin';
+      pinButton.textContent = '📌';
+      pinButton.classList.toggle('active', profile.pinned === true);
+      pinButton.setAttribute('aria-label', profile.pinned === true ? `取消 ${profile.name} 的常驻` : `将 ${profile.name} 设为常驻`);
+      pinButton.title = profile.pinned === true ? `取消常驻（下次打开不再自动出现）` : `设为常驻（下次打开时自动出现在会话栏）`;
+      pinButton.addEventListener('click', () => togglePinned(profile));
       const deleteButton = document.createElement('button');
       deleteButton.type = 'button';
       deleteButton.className = 'saved-profile-delete';
@@ -503,9 +561,57 @@ function renderProfiles(selectedId = '') {
       deleteButton.setAttribute('aria-label', `删除 ${profile.name}`);
       deleteButton.title = `删除 ${profile.name}`;
       deleteButton.addEventListener('click', () => deleteProfile(profile));
-    item.append(selectButton, deleteButton);
+    item.append(selectButton, pinButton, deleteButton);
     profileList.append(item);
   });
+}
+async function togglePinned(profile) {
+  const next = { ...profile, pinned: profile.pinned !== true };
+  try {
+    const response = await fetch('/api/profiles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next) });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.message);
+    const index = profiles.findIndex((item) => profileId(item) === profileId(result.profile));
+    if (index >= 0) profiles[index] = result.profile; else profiles.push(result.profile);
+    renderProfiles();
+    if (next.pinned) openPinnedSession(result.profile);
+  } catch (error) { showProfileFeedback(error.message || '更新常驻设置失败。', 'error'); }
+}
+function openPinnedSession(profile) {
+  const existing = [...sessions.values()].find((session) => (session.connection && session.connection.name === profile.name) || (session.pendingProfile && session.pendingProfile.name === profile.name));
+  if (existing) {
+    activateSession(existing.id);
+    connectPending(existing);
+    return;
+  }
+  const session = createSession(profile.name || profile.host);
+  session.terminal.clear();
+  establishConnection(session, profile);
+}
+function connectPending(session) {
+  if (!session.pendingProfile || session.connection) return;
+  const profile = session.pendingProfile;
+  session.pendingProfile = undefined;
+  establishConnection(session, profile);
+}
+function restorePinnedSessions() {
+  let restored = false;
+  for (const profile of profiles) {
+    if (profile.pinned !== true) continue;
+    const exists = [...sessions.values()].some((session) => (session.connection && session.connection.name === profile.name) || (session.pendingProfile && session.pendingProfile.name === profile.name));
+    if (exists) continue;
+    const session = createSession(profile.name || profile.host);
+    session.pendingProfile = profile;
+    restored = true;
+  }
+  if (!restored) return;
+  activeSessionId = null;
+  sessions.forEach((session) => {
+    session.host.classList.remove('active');
+    session.tab.classList.remove('active');
+  });
+  emptyState.hidden = false;
+  refreshActiveStatus();
 }
 async function deleteProfile(profile) {
   try {
@@ -521,7 +627,7 @@ function fillProfile(profile) {
   setAuthMode(profile.authMode);
 }
 async function loadProfiles() {
-  try { const response = await fetch('/api/profiles'); if (!response.ok) throw new Error(); profiles = await response.json(); renderProfiles(); } catch { activeSession()?.terminal.writeln('\r\n\x1b[31m无法加载已保存的连接。\x1b[0m'); }
+  try { const response = await fetch('/api/profiles'); if (!response.ok) throw new Error(); profiles = await response.json(); renderProfiles(); restorePinnedSessions(); } catch { activeSession()?.terminal.writeln('\r\n\x1b[31m无法加载已保存的连接。\x1b[0m'); }
 }
 function scheduleReconnect(session) {
   if (session.manuallyClosed || !session.connection || session.reconnectTimer) return;
@@ -725,9 +831,6 @@ function closeShutdownConfirm(result) {
 shutdownConfirmCancelButton.addEventListener('click', () => closeShutdownConfirm(false));
 shutdownConfirmConfirmButton.addEventListener('click', () => closeShutdownConfirm(true));
 shutdownConfirmBackdrop.addEventListener('click', () => closeShutdownConfirm(false));
-document.addEventListener('keydown', (event) => {
-  if (!shutdownConfirmDialog.hidden && event.key === 'Escape') closeShutdownConfirm(false);
-});
 function openProfileOverwrite(description) {
   profileOverwriteDescription.textContent = description;
   profileOverwriteDialog.hidden = false;
@@ -746,9 +849,6 @@ function closeProfileOverwrite(result) {
 profileOverwriteCancelButton.addEventListener('click', () => closeProfileOverwrite(false));
 profileOverwriteConfirmButton.addEventListener('click', () => closeProfileOverwrite(true));
 profileOverwriteBackdrop.addEventListener('click', () => closeProfileOverwrite(false));
-document.addEventListener('keydown', (event) => {
-  if (!profileOverwriteDialog.hidden && event.key === 'Escape') closeProfileOverwrite(false);
-});
 shutdownButton.addEventListener('click', async () => {
   if (!(await openShutdownConfirm())) return;
   shutdownButton.disabled = true;
@@ -760,16 +860,90 @@ shutdownButton.addEventListener('click', async () => {
   }
 });
 terminalSettingsButton.addEventListener('click', () => {
+  backgroundSettingsMenu.hidden = true;
+  backgroundSettingsButton.setAttribute('aria-expanded', 'false');
   terminalSettingsMenu.hidden = !terminalSettingsMenu.hidden;
   terminalSettingsButton.setAttribute('aria-expanded', String(!terminalSettingsMenu.hidden));
 });
 fontSizeInput.addEventListener('input', () => { terminalFontSettings.fontSize = Number(fontSizeInput.value); applyTerminalFontSettings(); });
 fontWeightInput.addEventListener('input', () => { terminalFontSettings.fontWeight = Number(fontWeightInput.value); applyTerminalFontSettings(); });
 letterSpacingInput.addEventListener('input', () => { terminalFontSettings.letterSpacing = Number(letterSpacingInput.value); applyTerminalFontSettings(); });
+fontColorInput.addEventListener('input', () => { terminalFontSettings.foreground = fontColorInput.value; applyTerminalFontSettings(); });
+backgroundSettingsButton.addEventListener('click', () => {
+  terminalSettingsMenu.hidden = true;
+  terminalSettingsButton.setAttribute('aria-expanded', 'false');
+  backgroundSettingsMenu.hidden = !backgroundSettingsMenu.hidden;
+  backgroundSettingsButton.setAttribute('aria-expanded', String(!backgroundSettingsMenu.hidden));
+});
+backgroundUploadButton.addEventListener('click', () => backgroundFileInput.click());
+backgroundFileInput.addEventListener('change', async () => {
+  const file = backgroundFileInput.files?.[0];
+  backgroundFileInput.value = '';
+  if (!file) return;
+  const extMatch = file.name.toLowerCase().match(/\.(png|jpe?g|webp|gif)$/);
+  const mime = file.type || (extMatch ? `image/${extMatch[1] === 'jpg' ? 'jpeg' : extMatch[1]}` : '');
+  if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(mime)) {
+    showProfileFeedback('仅支持 PNG、JPEG、WebP 或 GIF 图片。', 'error');
+    return;
+  }
+  if (file.size > 8 * 1024 * 1024) {
+    showProfileFeedback('图片大小必须在 8MB 以内。', 'error');
+    return;
+  }
+  try {
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(new Error('read-failed'));
+      reader.readAsDataURL(file);
+    });
+    const data = dataUrl.slice(dataUrl.indexOf(',') + 1);
+    const response = await fetch('/api/background', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data, contentType: mime, opacity: backgroundState.opacity })
+    });
+    if (!response.ok) throw new Error('upload-failed');
+    backgroundState = await response.json();
+    applyBackground();
+    showProfileFeedback('背景图片已更新。');
+  } catch {
+    showProfileFeedback('上传背景图片失败。', 'error');
+  }
+});
+backgroundOpacityInput.addEventListener('input', () => {
+  backgroundState.opacity = Number(backgroundOpacityInput.value) / 100;
+  backgroundOpacityValue.value = `${backgroundOpacityInput.value}%`;
+  document.body.style.setProperty('--webssh-bg-opacity', String(backgroundState.opacity));
+  sessions.forEach((session) => { session.terminal.options.theme = buildTerminalTheme(); });
+});
+backgroundOpacityInput.addEventListener('change', async () => {
+  try {
+    await fetch('/api/background', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ opacity: backgroundState.opacity })
+    });
+  } catch {
+    /* 忽略保存失败 */
+  }
+});
+backgroundRemoveButton.addEventListener('click', async () => {
+  try {
+    const response = await fetch('/api/background', { method: 'DELETE' });
+    if (!response.ok) throw new Error('remove-failed');
+    backgroundState = await response.json();
+    applyBackground();
+  } catch {
+    showProfileFeedback('清除背景失败。', 'error');
+  }
+});
 document.addEventListener('click', (event) => {
   if (!event.target.closest('.terminal-settings')) {
     terminalSettingsMenu.hidden = true;
     terminalSettingsButton.setAttribute('aria-expanded', 'false');
+    backgroundSettingsMenu.hidden = true;
+    backgroundSettingsButton.setAttribute('aria-expanded', 'false');
   }
 });
 function updateSessionTabsOverflow() {
@@ -790,7 +964,12 @@ openDrawerButton.addEventListener('click', () => { prepareNewConnection(); openD
 emptyStateConnectButton.addEventListener('click', () => { prepareNewConnection(); openDrawer(emptyStateConnectButton); });
 drawerBackdrop.addEventListener('click', closeDrawer);
 closeDrawerButton.addEventListener('click', closeDrawer);
-document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && drawer.classList.contains('open')) closeDrawer(); });
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape') return;
+  if (!shutdownConfirmDialog.hidden) return closeShutdownConfirm(false);
+  if (!profileOverwriteDialog.hidden) return closeProfileOverwrite(false);
+  if (drawer.classList.contains('open')) closeDrawer();
+});
 uploadButton.addEventListener('click', () => {
   if (!activeSession()?.connected) return activeSession()?.terminal.writeln('\r\n\x1b[31m请先连接 SSH 会话。\x1b[0m');
   setUploadDirectoryError();
@@ -841,6 +1020,7 @@ saveProfileButton.addEventListener('click', async () => {
   const values = Object.fromEntries(new FormData(form));
   const profile = { name: values.name.trim(), host: values.host, port: values.port, username: values.username, authMode, password: authMode === 'password' ? values.password : '', privateKey: authMode === 'key' ? values.privateKey : '', passphrase: authMode === 'key' ? values.passphrase : '' };
   const existing = profiles.find((item) => profileId(item) === profileId(profile));
+  if (existing) profile.pinned = existing.pinned === true;
   if (existing && !(await openProfileOverwrite(`主机 ${profile.host}:${profile.port} 已存在同名配置，是否覆盖？`))) return;
   try {
     const response = await fetch('/api/profiles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(profile) });
@@ -858,4 +1038,5 @@ new ResizeObserver(() => requestAnimationFrame(() => fitSession(activeSession())
 applyTheme(localStorage.getItem('webssh-theme') || 'dark');
 applyTerminalFontSettings();
 updateEmptyState();
+loadBackground();
 loadProfiles();

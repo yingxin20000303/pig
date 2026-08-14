@@ -1,5 +1,5 @@
 appname=webssh
-version=0.1.0
+version=0.1.1
 display_name=${common.display_name}
 desc="${common.desc}"
 source=thirdparty
@@ -16,4 +16,4 @@ service_port=1314
 desktop_uidir=ui
 desktop_applaunchname=webssh.proxy.Application
 install_dep_apps=nodejs_v22
-changelog=Initial fnOS native package release.
+changelog=Fixed dialog occlusion, unified background transparency via slider, added terminal font color and background status indicator.

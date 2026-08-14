@@ -10,7 +10,6 @@ import { WebSocketServer, WebSocket } from 'ws';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 app.disable('x-powered-by');
-app.use(express.json({ limit: '64kb' }));
 app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders: (res) => {
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -19,8 +18,13 @@ app.use(express.static(path.join(__dirname, 'public'), {
   }
 }));
 
+app.use((request, response, next) => {
+  if (request.method !== 'GET' || request.path.startsWith('/api/')) return next();
+  response.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 const profilesPath = process.env.WEBSSH_PROFILES_PATH || path.join(__dirname, 'ssh-connections.json');
-const profileFields = ['name', 'host', 'port', 'username', 'authMode', 'password', 'privateKey', 'passphrase'];
+const profileFields = ['name', 'host', 'port', 'username', 'authMode', 'password', 'privateKey', 'passphrase', 'pinned'];
 
 async function readProfiles() {
   try {
@@ -50,13 +54,14 @@ app.get('/api/profiles', async (_request, response) => {
   }
 });
 
-app.post('/api/profiles', async (request, response) => {
+app.post('/api/profiles', express.json({ limit: '64kb' }), async (request, response) => {
   const profile = publicProfile(request.body ?? {});
   profile.name = String(profile.name).trim();
   profile.host = String(profile.host).trim();
   profile.username = String(profile.username).trim();
   profile.port = Number(profile.port) || 22;
   profile.authMode = profile.authMode === 'key' ? 'key' : 'password';
+  profile.pinned = profile.pinned === true || profile.pinned === 'true';
   if (!profile.name || !profile.host || !profile.username || !Number.isInteger(profile.port) || profile.port < 1 || profile.port > 65535) {
     return response.status(400).json({ message: '请填写有效的连接名称、主机、端口和用户名。' });
   }
@@ -84,10 +89,83 @@ app.delete('/api/profiles/:name', async (request, response) => {
   }
 });
 
+const backgroundPath = process.env.WEBSSH_BACKGROUND_PATH || path.join(__dirname, 'background.json');
+const uploadsDir = path.join(__dirname, 'public', 'uploads');
+const DEFAULT_BACKGROUND = { url: null, opacity: 0.5 };
+const BACKGROUND_CONTENT_TYPES = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' };
+
+function clampOpacity(value) {
+  const opacity = Number(value);
+  return Number.isFinite(opacity) ? Math.min(1, Math.max(0, opacity)) : DEFAULT_BACKGROUND.opacity;
+}
+
+async function readBackground() {
+  try {
+    const saved = JSON.parse(await fs.readFile(backgroundPath, 'utf8'));
+    return {
+      url: typeof saved.url === 'string' && saved.url ? saved.url : null,
+      opacity: clampOpacity(saved.opacity)
+    };
+  } catch (error) {
+    if (error.code === 'ENOENT') return { ...DEFAULT_BACKGROUND };
+    throw error;
+  }
+}
+
+app.get('/api/background', async (_request, response) => {
+  try {
+    response.json(await readBackground());
+  } catch {
+    response.status(500).json({ message: '无法读取背景设置。' });
+  }
+});
+
+app.post('/api/background', express.json({ limit: '16mb' }), async (request, response) => {
+  try {
+    const body = request.body ?? {};
+    const current = await readBackground();
+    let url = current.url;
+    const { data, contentType } = body;
+    if (data) {
+      const extension = BACKGROUND_CONTENT_TYPES[String(contentType || '')];
+      if (!extension) return response.status(400).json({ message: '仅支持 PNG、JPEG、WebP 或 GIF 图片。' });
+      let buffer;
+      try {
+        buffer = Buffer.from(String(data), 'base64');
+      } catch {
+        return response.status(400).json({ message: '图片数据无效。' });
+      }
+      if (!buffer.length || buffer.length > 8 * 1024 * 1024) return response.status(400).json({ message: '图片大小必须在 8MB 以内。' });
+      await fs.mkdir(uploadsDir, { recursive: true });
+      await fs.writeFile(path.join(uploadsDir, `background.${extension}`), buffer);
+      url = `/uploads/background.${extension}`;
+    }
+    const opacity = clampOpacity(body.opacity);
+    await fs.writeFile(backgroundPath, `${JSON.stringify({ url, opacity }, null, 2)}\n`, 'utf8');
+    response.json({ url, opacity });
+  } catch {
+    response.status(500).json({ message: '无法保存背景设置。' });
+  }
+});
+
+app.delete('/api/background', async (_request, response) => {
+  try {
+    const current = await readBackground();
+    if (current.url) {
+      const filename = path.basename(current.url);
+      await fs.rm(path.join(uploadsDir, filename), { force: true }).catch(() => {});
+    }
+    await fs.rm(backgroundPath, { force: true }).catch(() => {});
+    response.json({ ...DEFAULT_BACKGROUND });
+  } catch {
+    response.status(500).json({ message: '无法清除背景设置。' });
+  }
+});
+
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: '/ssh' });
 
-app.post('/api/shutdown', (req, res) => {
+app.post('/api/shutdown', (_req, res) => {
   res.status(202).json({ ok: true });
   setTimeout(() => {
     wss.clients.forEach((client) => client.terminate());

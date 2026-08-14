@@ -4,6 +4,8 @@ dist/
 
 # Local runtime data: may contain SSH hosts, passwords, private keys, or passphrases
 ssh-connections.json
+app/background.json
+app/public/uploads/
 *.local
 .env
 .env.*
