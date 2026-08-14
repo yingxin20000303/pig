@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="WebSSH：本地优先的多会话 Web SSH 终端与 SFTP 文件传输工具。">
+  <title>WebSSH · 本地优先的 SSH 工具</title>
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <p class="eyebrow">LOCAL-FIRST SSH WORKSPACE</p>
+      <h1>WebSSH</h1>
+      <p class="lead">一个在本地或自托管环境中运行的浏览器 SSH 工具，集成多会话终端、SFTP 文件传输和已保存连接管理。</p>
+      <div class="actions">
+        <a class="button primary" href="https://github.com/yingxin20000303/pig/releases/latest">下载 v0.1.2</a>
+        <a class="button secondary" href="https://github.com/yingxin20000303/pig">查看源码</a>
+      </div>
+      <p class="notice">这是产品展示页，不提供在线 SSH 服务。请下载并在自己的设备或受控服务器上运行。</p>
+    </section>
+
+    <section class="features" aria-label="功能">
+      <article><h2>多会话终端</h2><p>在独立标签页中保持多个 SSH 会话，快速切换并同步终端尺寸。</p></article>
+      <article><h2>安全的连接保存</h2><p>保存的连接配置使用 AES-256-GCM 本地加密，支持密码和 OpenSSH 私钥认证。</p></article>
+      <article><h2>SFTP 文件传输</h2><p>上传本地目录，浏览远程目录并下载一个或多个文件。</p></article>
+      <article><h2>多平台交付</h2><p>提供 Windows 便携版、Docker 部署方式和 fnOS 原生 FPK 安装包。</p></article>
+    </section>
+
+    <section class="preview">
+      <div>
+        <p class="eyebrow">INTERFACE</p>
+        <h2>为日常运维而设计</h2>
+        <p>深色与浅色主题、字体颜色、字号及背景设置均可即时调整。保存常用连接后，可一键快速重连。</p>
+        <a class="text-link" href="https://github.com/yingxin20000303/pig#webssh">查看完整使用手册 →</a>
+      </div>
+      <img src="docs/screenshots/01-home.png" alt="WebSSH 深色主题主界面">
+    </section>
+
+    <section class="downloads">
+      <p class="eyebrow">DOWNLOADS</p>
+      <h2>选择适合你的运行方式</h2>
+      <div class="download-grid">
+        <article>
+          <h3>Windows 便携版</h3>
+          <p>解压后双击运行，浏览器自动打开本地 WebSSH。</p>
+          <a href="https://github.com/yingxin20000303/pig/releases/download/v0.1.2/WebSSH-0.1.2-Windows.zip">下载 Windows ZIP</a>
+        </article>
+        <article>
+          <h3>fnOS 原生应用</h3>
+          <p>通过飞牛 NAS 应用中心手动安装，无需 Docker。</p>
+          <a href="https://github.com/yingxin20000303/pig/releases/download/v0.1.2/WebSSH-0.1.2-fnOS.fpk">下载 fnOS FPK</a>
+        </article>
+        <article>
+          <h3>Docker / 源码</h3>
+          <p>适合自托管、开发与定制部署。</p>
+          <a href="https://github.com/yingxin20000303/pig/tree/main/app">查看部署说明</a>
+        </article>
+      </div>
+    </section>
+
+    <section class="security">
+      <p class="eyebrow">SECURITY</p>
+      <h2>请在可信环境中使用</h2>
+      <p>WebSSH 不提供用户登录、TLS 或公网访问保护。不要直接暴露到公网；远程访问请使用 VPN，或部署在具备 HTTPS、身份验证和访问控制的反向代理之后。</p>
+    </section>
+  </main>
+  <footer>
+    <span>WebSSH Contributors · MIT License</span>
+    <a href="https://github.com/yingxin20000303/pig/issues">反馈问题</a>
+  </footer>
+</body>
+</html>
