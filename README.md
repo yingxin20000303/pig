@@ -2,7 +2,7 @@
 
 一个本地运行的 Web SSH 桌面工具，提供多会话终端、连接配置管理、SFTP 文件传输与连接状态信息。
 
-> 当前版本：`0.1.1`
+> 当前版本：`0.1.2`
 
 本仓库按运行形态划分为两个独立部分：
 
@@ -44,8 +44,9 @@ npm run dev
 
 ## 安全提示
 
-- 连接配置默认保存于 `app/ssh-connections.json`，已被 `.gitignore` 忽略，请勿提交真实主机、密码或私钥。
-- 应用不提供用户登录、TLS 或公网访问保护，请勿直接暴露到公网。
+- 连接配置默认保存于 `app/ssh-connections.json`，使用 **AES-256-GCM** 加密；首次保存时会生成同目录的 `ssh-connections.json.key`。两者均已被 `.gitignore` 忽略，请勿提交、删除或与不可信方共享。
+- 旧版明文 JSON 会在首次读取时自动迁移为加密格式。恢复备份时必须同时恢复配置文件和对应 `.key` 文件；也可通过 `WEBSSH_PROFILES_KEY`（32 字节 Base64 或 64 位十六进制）托管密钥。
+- 应用不提供用户登录、TLS 或公网访问保护，请勿直接暴露到公网；若需局域网或公网访问，请使用 VPN 或具备 HTTPS 与身份验证的反向代理。
 
 ## 开源协议
 
@@ -53,5 +54,5 @@ npm run dev
 
 ## 作者与版权
 
-- 作者：yingxin
-- Copyright © 2026 yingxin
+- WebSSH Contributors
+- Copyright © 2026 WebSSH Contributors

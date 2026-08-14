@@ -1,10 +1,10 @@
 {
   "name": "webssh",
   "productName": "WebSSH",
-  "version": "0.1.1",
-  "author": "yingxin",
+  "version": "0.1.2",
+  "author": "WebSSH Contributors",
   "description": "WebSSH Desktop",
-  "copyright": "Copyright © 2026 yingxin. Developed 2026-08-12",
+  "copyright": "Copyright © 2026 WebSSH Contributors",
   "license": "MIT",
   "private": true,
   "type": "module",

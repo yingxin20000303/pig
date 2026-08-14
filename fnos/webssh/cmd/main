@@ -12,7 +12,7 @@ if [ -f "${TRIM_PKGETC}/settings.conf" ]; then
 fi
 PORT="${wizard_webssh_http_port:-${TRIM_SERVICE_PORT:-1314}}"
 
-CMD="WEBSSH_HOST=0.0.0.0 WEBSSH_PROFILES_PATH=${DATA_DIR}/ssh-connections.json PORT=${PORT} node ${TRIM_APPDEST}/server/server.js"
+CMD="WEBSSH_HOST=0.0.0.0 WEBSSH_PROFILES_PATH=${DATA_DIR}/ssh-connections.json WEBSSH_PROFILES_KEY_PATH=${DATA_DIR}/ssh-connections.key PORT=${PORT} node ${TRIM_APPDEST}/server/server.js"
 
 log_msg() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "${LOG_FILE}"

@@ -40,7 +40,7 @@ $appVersion = $appPkg.version
 $assetName = ('WebSSH-{0}-fnOS' -f $appVersion)
 
 # 需要剔除的原生编译/可选模块（会导致架构不通用）
-$nativeExclude = @('cpu-features', 'nan', 'buildcheck', '.bin', '.cache')
+$nativeExclude = @('cpu-features', 'nan', 'buildcheck', '.bin', '.cache', 'ssh2\test')
 
 function Resolve-Fnpack {
     param([string]$Path)
@@ -104,15 +104,14 @@ function Invoke-FnpackBuild {
         Pop-Location
     }
 
-    $fpkFiles = @(Get-ChildItem $fpkRoot -Filter '*.fpk' -File) + @(Get-ChildItem $outputRoot -Filter '*.fpk' -File -ErrorAction SilentlyContinue)
-    $fpkFiles = $fpkFiles | Select-Object -Unique
+    # 仅取 fnpack 本次生成于 fpkRoot 的 fpk（排除 dist\ 下历史版本产物，避免旧包覆盖新资产）
+    $fpkFiles = @(Get-ChildItem $fpkRoot -Filter '*.fpk' -File)
     if (-not $fpkFiles) { throw 'fnpack 未生成 .fpk 文件' }
+    $fpkFile = $fpkFiles | Sort-Object LastWriteTime -Descending | Select-Object -First 1
     $assetPath = Join-Path $outputRoot ($assetName + '.fpk')
     Remove-Item $assetPath -Force -ErrorAction SilentlyContinue
-    foreach ($f in $fpkFiles) {
-        Copy-Item $f.FullName $assetPath -Force
-        Write-Host ("FPK 产物：{0}" -f $assetPath)
-    }
+    Copy-Item $fpkFile.FullName $assetPath -Force
+    Write-Host ("FPK 产物：{0}" -f $assetPath)
 }
 
 $fnpackPath = Resolve-Fnpack -Path $Fnpack

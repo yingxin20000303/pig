@@ -14,7 +14,8 @@ RUN mkdir -p /data \
 ENV NODE_ENV=production \
     PORT=1314 \
     WEBSSH_HOST=0.0.0.0 \
-    WEBSSH_PROFILES_PATH=/data/ssh-connections.json
+    WEBSSH_PROFILES_PATH=/data/ssh-connections.json \
+    WEBSSH_PROFILES_KEY_PATH=/data/ssh-connections.key
 
 USER node
 

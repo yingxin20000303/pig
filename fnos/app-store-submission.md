@@ -1,7 +1,7 @@
 # WebSSH — 飞牛应用商店上架资料
 
 > 用于提交至飞牛应用开放平台（https://developer.fnnas.com/）的审核资料整理。
-> 项目仓库：https://github.com/yingxin20000303/pig（MIT License）
+> 项目仓库：https://github.com/example-org/webssh（MIT License）
 
 ---
 
@@ -11,11 +11,11 @@
 | --- | --- |
 | 应用名称 | WebSSH |
 | 应用包名（appname） | `webssh` |
-| 版本号 | 0.1.1 |
-| 分类 | 工具 / 网络 |
-| 开发者 | yingxin |
-| 维护者（maintainer） | yingxin |
-| 维护者主页 | https://github.com/yingxin20000303/pig |
+| 版本号 | 0.1.2 |
+| 分类 | 开发工具 |
+| 开发者 | WebSSH Contributors |
+| 维护者（maintainer） | WebSSH Contributors |
+| 维护者主页 | https://github.com/example-org/webssh |
 | 开源协议 | MIT |
 | 支持平台 | x86_64 / ARM64（`platform=all`） |
 | 依赖运行时 | `nodejs_v22`（系统自动按架构安装） |
@@ -56,6 +56,10 @@
 ### 更新日志（changelog）
 
 ```
+v0.1.2
+- 连接配置改为 AES-256-GCM 加密保存，支持旧版明文配置自动迁移
+- 配置写入使用原子替换与串行化处理，提升意外退出和并发操作时的可靠性
+- WebSocket 增加可信来源校验，提升本地服务访问安全性
 v0.1.1
 - 修复操作栏遮挡弹窗、标签栏进入会话残留首页内容等界面问题
 - 背景透明度统一由背景设置滑条控制，深浅色模式背景全局生效
@@ -82,12 +86,12 @@ v0.1.0
 ## 4. 安全说明（审核 / 用户告知用）
 
 > **应用行为与数据安全：**
-> - 所有连接配置（主机、用户名、密码、私钥、口令）**仅保存在设备本地**（`@appshare/webssh/ssh-connections.json`），不采集、不上传任何数据。
+> - 所有连接配置（主机、用户名、密码、私钥、口令）**仅保存在设备本地**，并以 AES-256-GCM 加密保存于 `@appshare/webssh-data/ssh-connections.json`；对应密钥仅保存在同目录的 `ssh-connections.key`，不采集、不上传任何数据。
 > - 应用不包含任何云服务、遥测或第三方统计代码。
 >
 > **使用边界：**
 > - 应用**不提供用户登录、TLS 加密或公网访问保护**，仅建议在可信内网环境使用；如需公网访问，请置于 VPN 或带 HTTPS/认证的反向代理之后。
-> - SSH 凭据以明文 JSON 保存于本地共享目录，请确保设备账户安全并限制共享目录访问权限。
+> - 设备管理员应保护应用数据目录，并在备份或迁移时同时保存加密配置及其密钥文件。
 > - CPU / 内存健康数据依赖远程主机的 Linux `/proc` 文件系统，非 Linux 或受限账户下相关指标可能不可用。
 
 ## 5. 提交前检查清单
@@ -100,7 +104,7 @@ v0.1.0
 - [ ] 商店展示用描述已填写（第 2 节内容）
 - [ ] 隐私/安全说明已附上（第 4 节）
 - [ ] `manifest` 中 `maintainer_url` / `distributor_url` 指向有效仓库
-- [ ] 仓库公开可访问（https://github.com/yingxin20000303/pig 已公开）
+- [ ] 仓库公开可访问（请填入正式项目地址）
 - [ ] 仓库内无真实凭据（`ssh-connections.json` 等已 .gitignore 忽略）
 
 ## 6. 提交步骤备忘
@@ -108,7 +112,7 @@ v0.1.0
 1. 登录 https://account.fnnas.com/ 注册飞牛账号
 2. 访问 https://developer.fnnas.com/ → 「我的应用」完成开发者认证
 3. 创建应用，填写基本信息、描述与上传截图
-4. 上传 `dist/fnos/WebSSH-0.1.1-fnOS.fpk`
+4. 上传 `dist/fnos/WebSSH-0.1.2-fnOS.fpk`
 5. 提交审核，等待官方反馈（如需补充材料按提示补齐）
 6. 审核通过后应用正式上架
 
@@ -120,4 +124,4 @@ v0.1.0
 
 ---
 
-*资料整理日期：2026-08-13。提交前请根据开放平台最新要求微调字段。*
+*资料整理日期：2026-08-14。提交前请根据开放平台最新要求微调字段。*

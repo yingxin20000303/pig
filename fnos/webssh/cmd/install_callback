@@ -5,9 +5,8 @@ echo "wizard_webssh_http_port=${wizard_webssh_http_port:-1314}" > "${TRIM_PKGETC
 
 DATA_DIR="${TRIM_DATA_SHARE_PATHS%%:*}"
 mkdir -p "${DATA_DIR}"
-if [ ! -f "${DATA_DIR}/ssh-connections.json" ]; then
-    echo "[]" > "${DATA_DIR}/ssh-connections.json"
-fi
+# 连接配置与 AES-256-GCM 密钥均由服务在首次保存时生成，避免创建明文配置文件。
+chmod 700 "${DATA_DIR}" 2>/dev/null || true
 chown -R "${TRIM_USERNAME}:${TRIM_USERNAME}" "${DATA_DIR}" 2>/dev/null || true
 
 exit 0

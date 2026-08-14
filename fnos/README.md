@@ -53,5 +53,5 @@ webssh/
 ## 运行与数据
 
 - 端口：安装向导中可自定义（默认 1314），保存于 `@appconf/settings.conf`；
-- 连接配置：持久化于 `@appshare/webssh-data/ssh-connections.json`；
-- 卸载时可选择保留或删除连接配置。
+- 连接配置：持久化于 `@appshare/webssh-data/ssh-connections.json`，以 AES-256-GCM 加密；独立密钥保存为同目录的 `ssh-connections.key`；
+- 卸载时可选择保留或删除连接配置及其密钥。

@@ -1,4 +1,4 @@
-import { timingSafeEqual } from 'node:crypto';
+import { createCipheriv, createDecipheriv, randomBytes, timingSafeEqual } from 'node:crypto';
 import fs from 'node:fs/promises';
 import http from 'node:http';
 import path from 'node:path';
@@ -24,13 +24,115 @@ app.use((request, response, next) => {
 });
 
 const profilesPath = process.env.WEBSSH_PROFILES_PATH || path.join(__dirname, 'ssh-connections.json');
+const profilesKeyPath = process.env.WEBSSH_PROFILES_KEY_PATH || `${profilesPath}.key`;
 const profileFields = ['name', 'host', 'port', 'username', 'authMode', 'password', 'privateKey', 'passphrase', 'pinned'];
+const PROFILE_ENCRYPTION_VERSION = 1;
+let profilesKeyPromise;
+let profilesWriteChain = Promise.resolve();
+let profilesMutationChain = Promise.resolve();
+
+function publicProfile(profile) {
+  const normalized = Object.fromEntries(profileFields.map((field) => [field, profile[field] ?? '']));
+  normalized.name = String(normalized.name).trim();
+  normalized.host = String(normalized.host).trim();
+  normalized.username = String(normalized.username).trim();
+  normalized.port = Number(normalized.port) || 22;
+  normalized.authMode = normalized.authMode === 'key' ? 'key' : 'password';
+  normalized.password = normalized.authMode === 'password' ? String(normalized.password) : '';
+  normalized.privateKey = normalized.authMode === 'key' ? String(normalized.privateKey) : '';
+  normalized.passphrase = normalized.authMode === 'key' ? String(normalized.passphrase) : '';
+  normalized.pinned = normalized.pinned === true || normalized.pinned === 'true';
+  return normalized;
+}
+
+function decodeProfilesKey(value) {
+  const source = String(value || '').trim();
+  const key = /^[0-9a-f]{64}$/i.test(source) ? Buffer.from(source, 'hex') : Buffer.from(source, 'base64');
+  if (key.length !== 32) throw new Error('WEBSSH_PROFILES_KEY 必须是 32 字节的 Base64 或 64 位十六进制密钥。');
+  return key;
+}
+
+async function getProfilesKey() {
+  if (profilesKeyPromise) return profilesKeyPromise;
+  profilesKeyPromise = (async () => {
+    if (process.env.WEBSSH_PROFILES_KEY) return decodeProfilesKey(process.env.WEBSSH_PROFILES_KEY);
+    await fs.mkdir(path.dirname(profilesKeyPath), { recursive: true });
+    try {
+      await fs.writeFile(profilesKeyPath, randomBytes(32), { flag: 'wx', mode: 0o600 });
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+    }
+    const key = await fs.readFile(profilesKeyPath);
+    if (key.length !== 32) throw new Error('连接配置密钥文件无效，请恢复备份或设置 WEBSSH_PROFILES_KEY。');
+    await fs.chmod(profilesKeyPath, 0o600).catch(() => {});
+    return key;
+  })();
+  return profilesKeyPromise;
+}
+
+function encryptProfiles(profiles, key) {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', key, iv);
+  const plaintext = Buffer.from(JSON.stringify(profiles.map(publicProfile)), 'utf8');
+  const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+  return JSON.stringify({
+    version: PROFILE_ENCRYPTION_VERSION,
+    algorithm: 'aes-256-gcm',
+    iv: iv.toString('base64'),
+    tag: cipher.getAuthTag().toString('base64'),
+    ciphertext: ciphertext.toString('base64')
+  }, null, 2) + '\n';
+}
+
+function decryptProfiles(envelope, key) {
+  if (envelope?.version !== PROFILE_ENCRYPTION_VERSION || envelope.algorithm !== 'aes-256-gcm') {
+    throw new Error('不支持的连接配置加密格式。');
+  }
+  const iv = Buffer.from(String(envelope.iv || ''), 'base64');
+  const tag = Buffer.from(String(envelope.tag || ''), 'base64');
+  const ciphertext = Buffer.from(String(envelope.ciphertext || ''), 'base64');
+  if (iv.length !== 12 || tag.length !== 16 || !ciphertext.length) throw new Error('连接配置加密数据无效。');
+  const decipher = createDecipheriv('aes-256-gcm', key, iv);
+  decipher.setAuthTag(tag);
+  const profiles = JSON.parse(Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8'));
+  if (!Array.isArray(profiles)) throw new Error('连接配置内容无效。');
+  return profiles.map(publicProfile);
+}
+
+async function writeFileAtomically(filePath, content, mode = 0o600) {
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  const temporaryPath = path.join(path.dirname(filePath), `.${path.basename(filePath)}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`);
+  try {
+    await fs.writeFile(temporaryPath, content, { encoding: 'utf8', mode });
+    await fs.rename(temporaryPath, filePath);
+    await fs.chmod(filePath, mode).catch(() => {});
+  } catch (error) {
+    await fs.rm(temporaryPath, { force: true }).catch(() => {});
+    throw error;
+  }
+}
+
+function queueProfilesWrite(operation) {
+  const pending = profilesWriteChain.then(operation, operation);
+  profilesWriteChain = pending.catch(() => {});
+  return pending;
+}
+
+function queueProfilesMutation(operation) {
+  const pending = profilesMutationChain.then(operation, operation);
+  profilesMutationChain = pending.catch(() => {});
+  return pending;
+}
 
 async function readProfiles() {
   try {
-    const content = await fs.readFile(profilesPath, 'utf8');
-    const profiles = JSON.parse(content);
-    return Array.isArray(profiles) ? profiles : [];
+    const parsed = JSON.parse(await fs.readFile(profilesPath, 'utf8'));
+    if (Array.isArray(parsed)) {
+      const profiles = parsed.map(publicProfile);
+      await writeProfiles(profiles);
+      return profiles;
+    }
+    return decryptProfiles(parsed, await getProfilesKey());
   } catch (error) {
     if (error.code === 'ENOENT') return [];
     throw error;
@@ -38,12 +140,10 @@ async function readProfiles() {
 }
 
 async function writeProfiles(profiles) {
-  await fs.mkdir(path.dirname(profilesPath), { recursive: true });
-  await fs.writeFile(profilesPath, `${JSON.stringify(profiles.map(publicProfile), null, 2)}\n`, 'utf8');
-}
-
-function publicProfile(profile) {
-  return Object.fromEntries(profileFields.map((field) => [field, profile[field] ?? '']));
+  return queueProfilesWrite(async () => {
+    const key = await getProfilesKey();
+    await writeFileAtomically(profilesPath, encryptProfiles(profiles, key));
+  });
 }
 
 app.get('/api/profiles', async (_request, response) => {
@@ -56,21 +156,17 @@ app.get('/api/profiles', async (_request, response) => {
 
 app.post('/api/profiles', express.json({ limit: '64kb' }), async (request, response) => {
   const profile = publicProfile(request.body ?? {});
-  profile.name = String(profile.name).trim();
-  profile.host = String(profile.host).trim();
-  profile.username = String(profile.username).trim();
-  profile.port = Number(profile.port) || 22;
-  profile.authMode = profile.authMode === 'key' ? 'key' : 'password';
-  profile.pinned = profile.pinned === true || profile.pinned === 'true';
   if (!profile.name || !profile.host || !profile.username || !Number.isInteger(profile.port) || profile.port < 1 || profile.port > 65535) {
     return response.status(400).json({ message: '请填写有效的连接名称、主机、端口和用户名。' });
   }
   try {
-    const profiles = await readProfiles();
-    const index = profiles.findIndex((item) => item.name === profile.name);
-    if (index >= 0) profiles[index] = profile;
-    else profiles.push(profile);
-    await writeProfiles(profiles);
+    await queueProfilesMutation(async () => {
+      const profiles = await readProfiles();
+      const index = profiles.findIndex((item) => item.name === profile.name);
+      if (index >= 0) profiles[index] = profile;
+      else profiles.push(profile);
+      await writeProfiles(profiles);
+    });
     response.json({ profile });
   } catch {
     response.status(500).json({ message: '无法保存连接配置。' });
@@ -79,10 +175,14 @@ app.post('/api/profiles', express.json({ limit: '64kb' }), async (request, respo
 
 app.delete('/api/profiles/:name', async (request, response) => {
   try {
-    const profiles = await readProfiles();
-    const remaining = profiles.filter((profile) => profile.name !== request.params.name);
-    if (remaining.length === profiles.length) return response.status(404).json({ message: '连接配置不存在。' });
-    await writeProfiles(remaining);
+    const removed = await queueProfilesMutation(async () => {
+      const profiles = await readProfiles();
+      const remaining = profiles.filter((profile) => profile.name !== request.params.name);
+      if (remaining.length === profiles.length) return false;
+      await writeProfiles(remaining);
+      return true;
+    });
+    if (!removed) return response.status(404).json({ message: '连接配置不存在。' });
     response.status(204).end();
   } catch {
     response.status(500).json({ message: '无法删除连接配置。' });
@@ -162,8 +262,31 @@ app.delete('/api/background', async (_request, response) => {
   }
 });
 
+function isTrustedWebSocketOrigin(origin, request) {
+  if (!origin) return false;
+  try {
+    const parsedOrigin = new URL(origin);
+    const requestHost = String(request.headers.host || '').toLowerCase();
+    const trustedOrigins = new Set([
+      `http://${requestHost}`,
+      `https://${requestHost}`,
+      ...String(process.env.WEBSSH_TRUSTED_ORIGINS || '').split(',').map((value) => value.trim()).filter(Boolean)
+    ]);
+    return trustedOrigins.has(parsedOrigin.origin);
+  } catch {
+    return false;
+  }
+}
+
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server, path: '/ssh' });
+const wss = new WebSocketServer({
+  server,
+  path: '/ssh',
+  verifyClient: (info, done) => {
+    if (isTrustedWebSocketOrigin(info.origin, info.req)) return done(true);
+    done(false, 403, 'WebSocket 来源不受信任。');
+  }
+});
 
 app.post('/api/shutdown', (_req, res) => {
   res.status(202).json({ ok: true });

@@ -72,7 +72,7 @@ docker compose down -v
 ### 使用 docker run
 
 ```bash
-docker build -t webssh:0.1.1 .
+docker build -t webssh:0.1.2 .
 docker volume create webssh-data
 docker run -d \
   --name webssh \
@@ -81,8 +81,9 @@ docker run -d \
   -e PORT=1314 \
   -e WEBSSH_HOST=0.0.0.0 \
   -e WEBSSH_PROFILES_PATH=/data/ssh-connections.json \
+  -e WEBSSH_PROFILES_KEY_PATH=/data/ssh-connections.key \
   -v webssh-data:/data \
-  webssh:0.1.1
+  webssh:0.1.2
 ```
 
 ### 环境变量
@@ -91,13 +92,15 @@ docker run -d \
 | --- | --- | --- | --- |
 | `PORT` | `1314` | `1314` | HTTP 与 WebSocket 服务端口。 |
 | `WEBSSH_HOST` | `127.0.0.1` | `0.0.0.0` | 服务监听地址；Docker 中必须设为 `0.0.0.0`。 |
-| `WEBSSH_PROFILES_PATH` | `./ssh-connections.json` | `/data/ssh-connections.json` | 连接配置保存位置，应指向持久化卷。 |
+| `WEBSSH_PROFILES_PATH` | `./ssh-connections.json` | `/data/ssh-connections.json` | AES-256-GCM 加密的连接配置保存位置，应指向持久化卷。 |
+| `WEBSSH_PROFILES_KEY_PATH` | `${WEBSSH_PROFILES_PATH}.key` | `/data/ssh-connections.key` | 本地生成的 32 字节配置密钥路径，应与配置一同持久化且不得公开。 |
+| `WEBSSH_PROFILES_KEY` | 未设置 | 未设置 | 可选：外部托管的 32 字节 Base64 或 64 位十六进制密钥；设置后不会生成本地密钥文件。 |
 
 ### 安全注意事项
 
 - 默认端口映射为 `127.0.0.1:1314:1314`，仅允许 Docker 主机本机访问。
 - 当前应用不提供用户登录、TLS 或公网访问保护。请不要直接暴露到公网；远程使用建议置于 VPN，或具备 HTTPS、身份认证和访问控制的反向代理之后。
-- 不要将真实的 `ssh-connections.json`、数据卷或包含凭据的镜像公开分享。
+- 不要将真实的 `ssh-connections.json`、对应的 `ssh-connections.json.key`、数据卷或包含凭据的镜像公开分享。
 
 ### 多架构镜像发布
 
@@ -106,7 +109,7 @@ Docker Buildx 可发布 `linux/amd64` 与 `linux/arm64` 镜像：
 ```bash
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
-  --tag <registry>/<namespace>/webssh:0.1.1 \
+  --tag <registry>/<namespace>/webssh:0.1.2 \
   --tag <registry>/<namespace>/webssh:latest \
   --push \
   .
@@ -136,13 +139,13 @@ dist\WebSSH-Portable\WebSSH.exe
 同时会打包出统一命名的分发资产（含操作系统标识）：
 
 ```text
-dist\WebSSH-0.1.1-Windows.zip
+dist\WebSSH-0.1.2-Windows.zip
 ```
 
 ## 连接配置与安全
 
-连接配置默认保存于本目录下的 `ssh-connections.json`；可通过 `WEBSSH_PROFILES_PATH` 环境变量指定其他位置。
+连接配置默认保存于本目录下的 `ssh-connections.json`；可通过 `WEBSSH_PROFILES_PATH` 环境变量指定其他位置。配置采用 **AES-256-GCM** 加密，首次保存时会生成同目录的 `ssh-connections.json.key`；也可通过 `WEBSSH_PROFILES_KEY` 使用外部托管密钥。
 
-**请勿将包含真实主机、用户名、密码、私钥或口令的 `ssh-connections.json` 提交到仓库。** 项目已通过 `.gitignore` 忽略本地连接配置。建议使用权限最小化的 SSH 账号，并妥善保管私钥和密码。
+旧版明文配置会在首次读取时自动迁移为加密格式。恢复备份必须同时恢复配置与对应 `.key` 文件；两者都已被 `.gitignore` 忽略，**请勿提交、删除或与不可信方共享**。建议使用权限最小化的 SSH 账号，并妥善保管私钥和密码。
 
 远程健康信息的 CPU、内存采集依赖 Linux 的 `/proc` 文件系统；在部分受限容器、非 Linux 系统或权限受限账户上，相关指标可能不可用。

@@ -17,20 +17,19 @@ $csc = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 if (-not (Test-Path $nodeSource)) { throw "Node runtime not found: $nodeSource" }
 if (-not (Test-Path $csc)) { throw "C# compiler not found: $csc" }
 
-$profilesPath = Join-Path $outputRoot 'ssh-connections.json'
 Remove-Item $outputRoot -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $outputRoot, $runtimeRoot | Out-Null
 
 Copy-Item $nodeSource (Join-Path $runtimeRoot 'node.exe')
 Copy-Item (Join-Path $appRoot 'server.js'), (Join-Path $appRoot 'launch-browser.js'), (Join-Path $appRoot 'package.json') -Destination $outputRoot
-[System.IO.File]::WriteAllText($profilesPath, '[]', [System.Text.UTF8Encoding]::new($false))
+# 连接配置和 AES-256-GCM 密钥均由服务首次保存时创建，避免发布包含初始明文配置。
 Copy-Item (Join-Path $appRoot 'public') -Destination $outputRoot -Recurse
 Copy-Item (Join-Path $appRoot 'node_modules') -Destination $outputRoot -Recurse
 
 Remove-Item (Join-Path $outputRoot 'node_modules\@yao-pkg') -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item (Join-Path $outputRoot 'node_modules\.bin') -Recurse -Force -ErrorAction SilentlyContinue
 # Remove unnecessary native/optional modules to keep the portable build lean
-foreach ($name in @('cpu-features', 'nan', 'buildcheck', '.cache')) {
+foreach ($name in @('cpu-features', 'nan', 'buildcheck', '.cache', 'ssh2\test')) {
     $target = Join-Path $outputRoot ("node_modules\{0}" -f $name)
     if (Test-Path $target) { Remove-Item $target -Recurse -Force }
 }
