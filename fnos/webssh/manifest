@@ -1,5 +1,5 @@
 appname=webssh
-version=0.1.1
+version=0.1.0
 display_name=${common.display_name}
 desc="${common.desc}"
 source=thirdparty
@@ -16,4 +16,4 @@ service_port=1314
 desktop_uidir=ui
 desktop_applaunchname=webssh.proxy.Application
 install_dep_apps=nodejs_v22
-changelog=Improvements for fnOS native package release: cleaner dependency tree, portable UI, native icon set.
+changelog=Initial fnOS native package release.

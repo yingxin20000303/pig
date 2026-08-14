@@ -104,7 +104,7 @@ v0.1.0
 1. 登录 https://account.fnnas.com/ 注册飞牛账号
 2. 访问 https://developer.fnnas.com/ → 「我的应用」完成开发者认证
 3. 创建应用，填写基本信息、描述与上传截图
-4. 上传 `dist/fnos/webssh.fpk`
+4. 上传 `dist/fnos/WebSSH-0.1.0-fnOS.fpk`
 5. 提交审核，等待官方反馈（如需补充材料按提示补齐）
 6. 审核通过后应用正式上架
 

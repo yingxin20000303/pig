@@ -133,6 +133,12 @@ npm run package:portable
 dist\WebSSH-Portable\WebSSH.exe
 ```
 
+同时会打包出统一命名的分发资产（含操作系统标识）：
+
+```text
+dist\WebSSH-0.1.0-Windows.zip
+```
+
 ## 连接配置与安全
 
 连接配置默认保存于本目录下的 `ssh-connections.json`；可通过 `WEBSSH_PROFILES_PATH` 环境变量指定其他位置。

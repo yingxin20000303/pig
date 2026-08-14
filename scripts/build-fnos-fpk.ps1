@@ -33,6 +33,12 @@ $serverRoot = Join-Path $fpkRoot 'app\server'
 $outputRoot = Join-Path $projectRoot 'dist\fnos'
 $toolsRoot = Join-Path $projectRoot 'tools'
 
+# Read version from app/package.json for unified asset naming
+$appPkg = Get-Content (Join-Path $appRoot 'package.json') -Raw | ConvertFrom-Json
+$appVersion = $appPkg.version
+# Unified asset name: WebSSH-<version>-<OS>
+$assetName = ('WebSSH-{0}-fnOS' -f $appVersion)
+
 # 需要剔除的原生编译/可选模块（会导致架构不通用）
 $nativeExclude = @('cpu-features', 'nan', 'buildcheck', '.bin', '.cache')
 
@@ -101,9 +107,11 @@ function Invoke-FnpackBuild {
     $fpkFiles = @(Get-ChildItem $fpkRoot -Filter '*.fpk' -File) + @(Get-ChildItem $outputRoot -Filter '*.fpk' -File -ErrorAction SilentlyContinue)
     $fpkFiles = $fpkFiles | Select-Object -Unique
     if (-not $fpkFiles) { throw 'fnpack 未生成 .fpk 文件' }
+    $assetPath = Join-Path $outputRoot ($assetName + '.fpk')
+    Remove-Item $assetPath -Force -ErrorAction SilentlyContinue
     foreach ($f in $fpkFiles) {
-        Copy-Item $f.FullName $outputRoot -Force
-        Write-Host ("FPK 产物：{0}" -f (Join-Path $outputRoot $f.Name))
+        Copy-Item $f.FullName $assetPath -Force
+        Write-Host ("FPK 产物：{0}" -f $assetPath)
     }
 }
 
