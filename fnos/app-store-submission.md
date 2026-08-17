@@ -1,7 +1,7 @@
 # WebSSH — 飞牛应用商店上架资料
 
 > 用于提交至飞牛应用开放平台（https://developer.fnnas.com/）的审核资料整理。
-> 项目仓库：https://github.com/example-org/webssh（MIT License）
+> 项目仓库：https://github.com/yingxin20000303/pig（MIT License）
 
 ---
 
@@ -15,7 +15,7 @@
 | 分类 | 开发工具 |
 | 开发者 | WebSSH Contributors |
 | 维护者（maintainer） | WebSSH Contributors |
-| 维护者主页 | https://github.com/example-org/webssh |
+| 维护者主页 | https://github.com/yingxin20000303/pig |
 | 开源协议 | MIT |
 | 支持平台 | x86_64 / ARM64（`platform=all`） |
 | 依赖运行时 | `nodejs_v22`（系统自动按架构安装） |
@@ -57,6 +57,7 @@
 
 ```
 v0.1.3
+- 修复 Docker 与 fnOS 中用户偏好、自定义背景配置及背景图片的持久化
 - 统一应用图标，已保存会话显示名称与连接信息双行布局
 - 拖拽排序重写为 Pointer Events，支持触摸设备
 - xterm 资源本地化，修复 Safari 页面错误与兼容性问题

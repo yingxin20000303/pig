@@ -56,7 +56,7 @@ docker compose up -d --build
 
 默认仅发布到 Docker 主机本机：<http://127.0.0.1:1314>
 
-连接配置保存在 Docker 命名卷 `webssh-data`，更新、重建容器或执行 `docker compose down` 后仍会保留。
+连接配置、用户偏好和自定义背景图片均保存在 Docker 命名卷 `webssh-data`，更新、重建容器或执行 `docker compose down` 后仍会保留。
 
 ```bash
 # 查看日志
@@ -83,6 +83,8 @@ docker run -d \
   -e WEBSSH_PROFILES_PATH=/data/ssh-connections.json \
   -e WEBSSH_PROFILES_KEY_PATH=/data/ssh-connections.key \
   -e WEBSSH_SETTINGS_PATH=/data/settings.json \
+  -e WEBSSH_BACKGROUND_PATH=/data/background.json \
+  -e WEBSSH_UPLOADS_PATH=/data/uploads \
   -v webssh-data:/data \
   webssh:0.1.3
 ```
@@ -97,7 +99,8 @@ docker run -d \
 | `WEBSSH_PROFILES_KEY_PATH` | `${WEBSSH_PROFILES_PATH}.key` | `/data/ssh-connections.key` | 本地生成的 32 字节配置密钥路径，应与配置一同持久化且不得公开。 |
 | `WEBSSH_PROFILES_KEY` | 未设置 | 未设置 | 可选：外部托管的 32 字节 Base64 或 64 位十六进制密钥；设置后不会生成本地密钥文件。 |
 | `WEBSSH_SETTINGS_PATH` | `./settings.json` | `/data/settings.json` | 用户偏好设置（主题、字体、排序等）保存位置，应指向持久化卷。 |
-| `WEBSSH_BACKGROUND_PATH` | `./background.json` | `/data/background.json` | 自定义背景图片配置保存位置。 |
+| `WEBSSH_BACKGROUND_PATH` | `./background.json` | `/data/background.json` | 自定义背景图片配置保存位置，应指向持久化卷。 |
+| `WEBSSH_UPLOADS_PATH` | `./public/uploads` | `/data/uploads` | 自定义背景图片文件保存位置，应指向持久化卷。 |
 
 ### 安全注意事项
 

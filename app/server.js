@@ -8,8 +8,16 @@ import { Client } from 'ssh2';
 import { WebSocketServer, WebSocket } from 'ws';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const uploadsDir = process.env.WEBSSH_UPLOADS_PATH || path.join(__dirname, 'public', 'uploads');
 const app = express();
 app.disable('x-powered-by');
+app.use('/uploads', express.static(uploadsDir, {
+  setHeaders: (res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
+}));
 app.use((request, response, next) => {
   const startedAt = Date.now();
   response.on('finish', () => {
@@ -203,7 +211,6 @@ app.delete('/api/profiles/:name', async (request, response) => {
 });
 
 const backgroundPath = process.env.WEBSSH_BACKGROUND_PATH || path.join(__dirname, 'background.json');
-const uploadsDir = path.join(__dirname, 'public', 'uploads');
 const DEFAULT_BACKGROUND = { url: null, opacity: 0.5 };
 const BACKGROUND_CONTENT_TYPES = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' };
 

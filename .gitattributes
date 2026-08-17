@@ -1,0 +1,2 @@
+# Force LF for shell scripts inside fnOS package (executed on Linux NAS, not Windows)
+fnos/webssh/cmd/* text eol=lf
