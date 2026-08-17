@@ -3,7 +3,8 @@
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $appRoot = Join-Path $projectRoot 'app'
 $distRoot = Join-Path $projectRoot 'dist'
-$outputRoot = Join-Path $distRoot 'WebSSH-Portable'
+$windowsDistRoot = Join-Path $distRoot 'windows'
+$outputRoot = Join-Path $windowsDistRoot 'WebSSH-Portable'
 $runtimeRoot = Join-Path $outputRoot 'runtime'
 
 # Read version from app/package.json for unified asset naming
@@ -44,8 +45,10 @@ if ($LASTEXITCODE -ne 0) { throw 'Launcher compilation failed.' }
 Get-ChildItem $outputRoot -Recurse -Force | Unblock-File -ErrorAction SilentlyContinue
 Write-Output "Build completed: $outputRoot\WebSSH.exe"
 
-# Package as zip with unified asset name
-$zipPath = Join-Path $distRoot ($assetName + '.zip')
+# Package as zip with unified asset name under dist/windows
+New-Item -ItemType Directory -Force -Path $windowsDistRoot | Out-Null
+$zipPath = Join-Path $windowsDistRoot ($assetName + '.zip')
 Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
 Compress-Archive -Path $outputRoot -DestinationPath $zipPath -CompressionLevel Optimal
+Remove-Item $outputRoot -Recurse -Force
 Write-Output ("Asset: {0}" -f $zipPath)
