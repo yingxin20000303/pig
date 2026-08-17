@@ -53,8 +53,9 @@ Copy-Item (Join-Path $appRoot 'node_modules') -Destination $outputRoot -Recurse
 
 Remove-Item (Join-Path $outputRoot 'node_modules\@yao-pkg') -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item (Join-Path $outputRoot 'node_modules\.bin') -Recurse -Force -ErrorAction SilentlyContinue
-# Remove unnecessary native/optional modules to keep the portable build lean
-foreach ($name in @('cpu-features', 'nan', 'buildcheck', '.cache', 'ssh2\test')) {
+# Remove unnecessary native/optional modules and bundled test fixtures.
+# Test fixtures may contain example certificates or private keys and are never needed at runtime.
+foreach ($name in @('cpu-features', 'nan', 'buildcheck', '.cache', 'ssh2\test', '.ssh2.DELETE')) {
     $target = Join-Path $outputRoot ("node_modules\{0}" -f $name)
     if (Test-Path $target) { Remove-Item $target -Recurse -Force }
 }
