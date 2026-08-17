@@ -120,7 +120,13 @@ h3 { margin: 0; font-size: 1.2rem; }
 .security > p { margin: 0; color: #58786c; font-size: .92rem; }
 
 .downloads { padding-bottom: 110px; }
-.download-note { max-width: 760px; margin: -22px 0 30px; padding: 13px 16px; border: 1px solid #f0dfc6; border-radius: 10px; background: #fff9f0; color: #7b6956; font-size: .9rem; }
+.release-note { display: flex; align-items: center; justify-content: space-between; gap: 24px; max-width: 900px; margin: -22px 0 18px; padding: 18px 20px; border: 1px solid #c8e8d8; border-radius: 12px; background: linear-gradient(135deg, #eaf8f0, #f8fdf9); }
+.release-note span { display: block; margin-bottom: 4px; color: var(--green); font-size: .68rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.release-note strong { color: var(--green-dark); font-size: 1.05rem; }
+.release-note p { margin: 6px 0 0; color: var(--muted); font-size: .9rem; }
+.release-note a { flex: none; color: var(--green-dark); font-size: .9rem; font-weight: 800; text-decoration: none; white-space: nowrap; }
+.release-note i { margin-left: 4px; font-style: normal; }
+.download-note { max-width: 760px; margin: 0 0 30px; padding: 13px 16px; border: 1px solid #f0dfc6; border-radius: 10px; background: #fff9f0; color: #7b6956; font-size: .9rem; }
 .download-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .download-card { min-height: 230px; display: flex; flex-direction: column; padding: 25px; border: 1px solid var(--line); border-radius: 16px; background: var(--white); text-decoration: none; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
 .download-card:hover { border-color: #a9d8c0; box-shadow: var(--shadow); transform: translateY(-3px); }
@@ -147,6 +153,7 @@ footer a { color: var(--muted); text-decoration: none; }
   .security { grid-template-columns: 45px 1fr; margin: 76px auto; }
   .security > p { grid-column: 1 / -1; }
   .downloads { padding-bottom: 76px; }
+  .release-note { align-items: flex-start; flex-direction: column; gap: 12px; }
   .download-grid { grid-template-columns: 1fr; }
 }
 
