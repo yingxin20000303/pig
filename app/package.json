@@ -1,7 +1,7 @@
 {
   "name": "webssh",
   "productName": "WebSSH",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "author": "WebSSH Contributors",
   "description": "WebSSH Desktop",
   "copyright": "Copyright © 2026 WebSSH Contributors",
@@ -12,12 +12,16 @@
   "scripts": {
     "dev": "node server.js",
     "start": "node launch-browser.js",
-    "check": "node --check server.js && node --check launch-browser.js && node --check public/app.js",
+    "check": "node check-all.mjs",
+    "test": "node --test test/functional.test.mjs test/stress.test.mjs",
     "package:portable": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ..\\scripts\\build-portable.ps1"
   },
   "dependencies": {
     "express": "^4.21.2",
     "ssh2": "^1.17.0",
     "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "playwright": "^1.62.1"
   }
 }

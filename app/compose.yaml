@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: webssh:0.1.4
+    image: webssh:0.1.5
     container_name: webssh
     restart: unless-stopped
     environment:

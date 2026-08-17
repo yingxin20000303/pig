@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="/vendor/xterm.css" />
   <link rel="icon" type="image/png" href="/icon.png" />
   <link rel="apple-touch-icon" href="/icon.png" />
-  <link rel="stylesheet" href="/style.css?v=19" />
+  <link rel="stylesheet" href="/style.css?v=24" />
 </head>
 <body data-theme="dark">
   <script>
@@ -84,7 +84,7 @@
         <div id="profile-list" class="profile-list" aria-label="已保存的连接"></div>
       </section>
       <p id="profile-feedback" class="profile-feedback" role="status" hidden></p>
-      <div class="drawer-divider" role="separator" aria-hidden="true"><span>新建连接</span></div>
+      <div class="drawer-divider" role="separator" aria-hidden="true"><span id="connection-form-divider">新建连接</span></div>
       <form id="connection-form">
         <label>名称<input name="name" placeholder="例如：生产服务器" autocomplete="off" required /></label>
         <label>主机<input name="host" placeholder="example.com 或 192.168.1.10" required autocomplete="off" /></label>
@@ -160,6 +160,10 @@
       <aside id="transfer-panel" class="transfer-panel" aria-live="polite"></aside>
     </section>
   </main>
-  <script type="module" src="/app.js?v=16"></script>
+  <div id="terminal-context-menu" class="terminal-context-menu" role="menu" hidden>
+    <button type="button" role="menuitem" class="terminal-context-menu-item" id="terminal-context-paste"><span aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M7 5h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/><path d="M9 13l2 2 4-4"/></svg></span> 粘贴</button>
+    <div id="terminal-context-hint" class="terminal-context-hint" role="status" hidden>Safari 剪贴板受限，请在终端内按 <kbd>⌘V</kbd> 粘贴</div>
+  </div>
+  <script type="module" src="/app.js?v=26"></script>
 </body>
 </html>

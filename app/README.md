@@ -39,6 +39,17 @@ npm start
 
 默认端口为 `1314`，可使用环境变量 `PORT` 覆盖。
 
+### 常用命令
+
+| 命令 | 说明 |
+| --- | --- |
+| `npm run dev` | 启动开发服务 |
+| `npm start` | 启动服务并自动打开浏览器 |
+| `npm run check` | 项目完整性检查：全量语法检查 + 前后端模块引用校验 + esbuild 前端打包验证 |
+| `npm test` | 运行自动化测试（功能 + 压力，共 32 项） |
+| `node scripts/take-screenshots.mjs` | 用 Playwright 无头浏览器重新生成 `docs/screenshots/` 文档截图 |
+| `npm run package:portable` | 构建 Windows 便携版 ZIP |
+
 ## Docker 部署
 
 > 容器运行的是 Web 服务，不会自动打开浏览器。启动后请在浏览器中访问服务地址。
@@ -72,7 +83,7 @@ docker compose down -v
 ### 使用 docker run
 
 ```bash
-docker build -t webssh:0.1.3 .
+docker build -t webssh:0.1.5 .
 docker volume create webssh-data
 docker run -d \
   --name webssh \
@@ -86,7 +97,7 @@ docker run -d \
   -e WEBSSH_BACKGROUND_PATH=/data/background.json \
   -e WEBSSH_UPLOADS_PATH=/data/uploads \
   -v webssh-data:/data \
-  webssh:0.1.3
+  webssh:0.1.5
 ```
 
 ### 环境变量
@@ -115,7 +126,7 @@ Docker Buildx 可发布 `linux/amd64` 与 `linux/arm64` 镜像：
 ```bash
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
-  --tag <registry>/<namespace>/webssh:0.1.3 \
+  --tag <registry>/<namespace>/webssh:0.1.5 \
   --tag <registry>/<namespace>/webssh:latest \
   --push \
   .

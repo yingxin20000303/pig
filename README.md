@@ -6,7 +6,7 @@
 
 多会话终端 · 连接配置管理 · SFTP 文件传输 · 连接状态监控
 
-[![Version](https://img.shields.io/badge/version-0.1.4-blue?style=flat-square)](https://github.com/yingxin20000303/pig/releases/tag/v0.1.4)
+[![Version](https://img.shields.io/badge/version-0.1.5-blue?style=flat-square)](https://github.com/yingxin20000303/pig/releases/tag/v0.1.5)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Docker%20%7C%20fnOS-orange?style=flat-square)](#-安装与启动)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](https://github.com/yingxin20000303/pig/pulls)

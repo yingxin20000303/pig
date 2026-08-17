@@ -1,5 +1,5 @@
 appname=webssh
-version=0.1.4
+version=0.1.5
 display_name=${common.display_name}
 desc="${common.desc}"
 source=thirdparty
@@ -16,4 +16,4 @@ service_port=1314
 desktop_uidir=ui
 desktop_applaunchname=webssh.proxy.Application
 install_dep_apps=nodejs_v22
-changelog=Improved SFTP file browsing and batch transfers, unified upload/download dialogs, and strengthened transfer validation and error handling.
+changelog=Refactored server and frontend into a modular architecture, added an automated test suite and project integrity checks, and refreshed documentation screenshots.
