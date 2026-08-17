@@ -16,7 +16,9 @@ ENV NODE_ENV=production \
     WEBSSH_HOST=0.0.0.0 \
     WEBSSH_PROFILES_PATH=/data/ssh-connections.json \
     WEBSSH_PROFILES_KEY_PATH=/data/ssh-connections.key \
-    WEBSSH_SETTINGS_PATH=/data/settings.json
+    WEBSSH_SETTINGS_PATH=/data/settings.json \
+    WEBSSH_BACKGROUND_PATH=/data/background.json \
+    WEBSSH_UPLOADS_PATH=/data/uploads
 
 USER node
 

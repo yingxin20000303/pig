@@ -69,6 +69,8 @@ function Copy-AppServer {
     Copy-Item (Join-Path $appRoot 'server.js') $serverRoot
     Copy-Item (Join-Path $appRoot 'package.json') $serverRoot
     Copy-Item (Join-Path $appRoot 'public') (Join-Path $serverRoot 'public') -Recurse
+    # 本地上传目录可能包含用户自定义背景图，发布包不应携带运行时数据。
+    Remove-Item (Join-Path $serverRoot 'public\uploads') -Recurse -Force -ErrorAction SilentlyContinue
 
     if (-not $SkipNodeModules) {
         Write-Host '复制 node_modules（剔除原生编译模块，保证 x86/ARM 通用）...'
