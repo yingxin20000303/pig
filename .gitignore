@@ -21,6 +21,13 @@ id_ed25519
 server-output.log
 server-error.log
 
+# One-off local release helpers and upload state
+.release-upload-status.json
+.upload-release-assets.cjs
+.retry-release-upload.cjs
+.finalize-release-upload.cjs
+.probe-release-upload.cjs
+
 # fnOS packaging tools and artifacts
 tools/
 dist/fnos/

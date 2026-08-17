@@ -131,21 +131,12 @@ docker buildx build \
 npm run package:portable
 ```
 
-构建依赖以下本机组件：
+构建会自动从 `PATH` 查找 Node.js 与 C# 编译器；如自动检测不适用，可通过 `-NodePath`、`-CscPath` 显式指定其完整路径。
 
-- `C:\Program Files\nodejs\node.exe`
-- `.NET Framework` 自带的 C# 编译器：`C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe`
-
-生成的可执行文件位于：
+构建期间会临时组装便携版目录，ZIP 创建成功后自动清理该中间目录。最终仅保留统一命名的分发资产：
 
 ```text
-dist\WebSSH-Portable\WebSSH.exe
-```
-
-同时会打包出统一命名的分发资产（含操作系统标识）：
-
-```text
-dist\WebSSH-0.1.3-Windows.zip
+dist\windows\WebSSH-<版本>-Windows.zip
 ```
 
 ## 连接配置与安全

@@ -12,6 +12,7 @@
   "scripts": {
     "dev": "node server.js",
     "start": "node launch-browser.js",
+    "check": "node --check server.js && node --check launch-browser.js && node --check public/app.js",
     "package:portable": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ..\\scripts\\build-portable.ps1"
   },
   "dependencies": {

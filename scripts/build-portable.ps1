@@ -1,4 +1,29 @@
-﻿$ErrorActionPreference = 'Stop'
+﻿#Requires -Version 5.1
+[CmdletBinding()]
+param(
+    [string]$NodePath,
+    [string]$CscPath
+)
+
+$ErrorActionPreference = 'Stop'
+
+function Resolve-RequiredExecutable {
+    param(
+        [string]$ProvidedPath,
+        [string]$CommandName,
+        [string]$FallbackPath,
+        [string]$Label
+    )
+
+    foreach ($candidate in @($ProvidedPath, $FallbackPath)) {
+        if ($candidate -and (Test-Path $candidate -PathType Leaf)) {
+            return (Resolve-Path $candidate).Path
+        }
+    }
+    $command = Get-Command $CommandName -ErrorAction SilentlyContinue
+    if ($command) { return $command.Source }
+    throw "未找到 $Label。请将其加入 PATH，或通过对应参数指定完整路径。"
+}
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $appRoot = Join-Path $projectRoot 'app'
@@ -12,11 +37,8 @@ $appPkg = Get-Content (Join-Path $appRoot 'package.json') -Raw | ConvertFrom-Jso
 $appVersion = $appPkg.version
 # Unified asset name: WebSSH-<version>-<OS>
 $assetName = ('WebSSH-{0}-Windows' -f $appVersion)
-$nodeSource = 'C:\Program Files\nodejs\node.exe'
-$csc = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
-
-if (-not (Test-Path $nodeSource)) { throw "Node runtime not found: $nodeSource" }
-if (-not (Test-Path $csc)) { throw "C# compiler not found: $csc" }
+$nodeSource = Resolve-RequiredExecutable -ProvidedPath $NodePath -CommandName 'node' -FallbackPath 'C:\Program Files\nodejs\node.exe' -Label 'Node.js 运行时'
+$csc = Resolve-RequiredExecutable -ProvidedPath $CscPath -CommandName 'csc' -FallbackPath 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe' -Label 'C# 编译器'
 
 Remove-Item $outputRoot -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $outputRoot, $runtimeRoot | Out-Null

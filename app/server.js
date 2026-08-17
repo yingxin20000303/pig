@@ -161,6 +161,29 @@ async function writeProfiles(profiles) {
   });
 }
 
+function isTrustedMutationOrigin(request) {
+  const origin = request.get('origin');
+  if (!origin) return false;
+  try {
+    const parsedOrigin = new URL(origin);
+    const requestHost = String(request.headers.host || '').toLowerCase();
+    const trustedOrigins = new Set([
+      `http://${requestHost}`,
+      `https://${requestHost}`,
+      ...String(process.env.WEBSSH_TRUSTED_ORIGINS || '').split(',').map((value) => value.trim()).filter(Boolean)
+    ]);
+    return trustedOrigins.has(parsedOrigin.origin);
+  } catch {
+    return false;
+  }
+}
+
+app.use('/api', (request, response, next) => {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(request.method)) return next();
+  if (isTrustedMutationOrigin(request)) return next();
+  response.status(403).json({ message: '请求来源不受信任。' });
+});
+
 app.get('/api/profiles', async (_request, response) => {
   try {
     response.json((await readProfiles()).map(publicProfile));
