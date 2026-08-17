@@ -11,7 +11,7 @@
 | --- | --- |
 | 应用名称 | WebSSH |
 | 应用包名（appname） | `webssh` |
-| 版本号 | 0.1.2 |
+| 版本号 | 0.1.3 |
 | 分类 | 开发工具 |
 | 开发者 | WebSSH Contributors |
 | 维护者（maintainer） | WebSSH Contributors |
@@ -56,6 +56,11 @@
 ### 更新日志（changelog）
 
 ```
+v0.1.3
+- 统一应用图标，已保存会话显示名称与连接信息双行布局
+- 拖拽排序重写为 Pointer Events，支持触摸设备
+- xterm 资源本地化，修复 Safari 页面错误与兼容性问题
+- 移除私钥口令输入框，跨浏览器兼容性加固
 v0.1.2
 - 连接配置改为 AES-256-GCM 加密保存，支持旧版明文配置自动迁移
 - 配置写入使用原子替换与串行化处理，提升意外退出和并发操作时的可靠性
@@ -112,7 +117,7 @@ v0.1.0
 1. 登录 https://account.fnnas.com/ 注册飞牛账号
 2. 访问 https://developer.fnnas.com/ → 「我的应用」完成开发者认证
 3. 创建应用，填写基本信息、描述与上传截图
-4. 上传 `dist/fnos/WebSSH-0.1.2-fnOS.fpk`
+4. 上传 `dist/fnos/WebSSH-0.1.3-fnOS.fpk`
 5. 提交审核，等待官方反馈（如需补充材料按提示补齐）
 6. 审核通过后应用正式上架
 

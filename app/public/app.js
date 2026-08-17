@@ -1,5 +1,60 @@
-import { Terminal } from 'https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/+esm';
-import { FitAddon } from 'https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/+esm';
+import { Terminal } from '/vendor/xterm.js';
+import { FitAddon } from '/vendor/addon-fit.js';
+
+function generateUUID() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => { const r = Math.random() * 16 | 0; const v = c === 'x' ? r : (r & 0x3 | 0x8); return v.toString(16); });
+}
+
+let settingsStore = { theme: 'dark', fontSize: 14, fontWeight: 400, letterSpacing: 0, fontColor: null, pinnedOrder: [] };
+let settingsLoaded = false;
+
+async function loadSettings() {
+  try {
+    const response = await fetch('/api/settings');
+    if (response.ok) {
+      settingsStore = await response.json();
+      settingsLoaded = true;
+    }
+  } catch { /* 服务不可用时使用默认值 */ }
+}
+
+function saveSettingsDebounced() {
+  clearTimeout(saveSettingsDebounced.timer);
+  saveSettingsDebounced.timer = setTimeout(async () => {
+    try { await fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settingsStore) }); } catch { /* 离线时忽略 */ }
+  }, 300);
+}
+
+function updateSettings(key, value) {
+  settingsStore[key] = value;
+  saveSettingsDebounced();
+}
+function clearChildren(element) {
+  if (element && typeof element.replaceChildren === 'function') { element.replaceChildren(); return; }
+  while (element && element.firstChild) element.removeChild(element.firstChild);
+}
+function readBlobArrayBuffer(blob) {
+  if (typeof blob.arrayBuffer === 'function') return blob.arrayBuffer();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error('read-failed'));
+    reader.readAsArrayBuffer(blob);
+  });
+}
+function formDataToObject(formData) {
+  const values = {};
+  formData.forEach((value, key) => { values[key] = value; });
+  return values;
+}
 
 const form = document.querySelector('#connection-form');
 const terminalArea = document.querySelector('#terminal');
@@ -19,7 +74,6 @@ const profileFeedback = document.querySelector('#profile-feedback');
 const saveProfileButton = document.querySelector('#save-profile-button');
 const drawer = document.querySelector('#connection-drawer');
 const drawerBackdrop = document.querySelector('#drawer-backdrop');
-const openDrawerButton = document.querySelector('#open-drawer-button');
 const uploadButton = document.querySelector('#upload-button');
 const downloadButton = document.querySelector('#download-button');
 const shutdownButton = document.querySelector('#shutdown-button');
@@ -75,11 +129,18 @@ const fontColorValue = document.querySelector('#font-color-value');
 const backgroundStatusDot = document.querySelector('#background-status-dot');
 
 const terminalFontSettings = {
-  fontSize: Math.min(24, Math.max(10, Number(localStorage.getItem('webssh-font-size')) || 14)),
-  fontWeight: Math.min(900, Math.max(100, Number(localStorage.getItem('webssh-font-weight')) || 400)),
-  letterSpacing: Math.min(8, Math.max(-2, Number(localStorage.getItem('webssh-letter-spacing')) || 0)),
-  foreground: localStorage.getItem('webssh-font-color') || null
+  fontSize: 14,
+  fontWeight: 400,
+  letterSpacing: 0,
+  foreground: null
 };
+
+function syncTerminalFontSettingsFromStore() {
+  terminalFontSettings.fontSize = settingsStore.fontSize;
+  terminalFontSettings.fontWeight = settingsStore.fontWeight;
+  terminalFontSettings.letterSpacing = settingsStore.letterSpacing;
+  terminalFontSettings.foreground = settingsStore.fontColor || null;
+}
 
 let authMode = 'password';
 let profiles = [];
@@ -88,15 +149,17 @@ let drawerTrigger;
 let editingSessionId = null;
 let uploadDirectoryValidation;
 const sessions = new Map();
+function socketIsOpen(socket) { return socket?.readyState === WebSocket.OPEN; }
+function socketIsConnecting(socket) { return socket?.readyState === WebSocket.CONNECTING; }
 setInterval(() => refreshConnectionHealth(), 1000);
 
 const transfers = new Map();
 function updateEmptyState() { emptyState.hidden = sessions.size > 0; }
 function refreshDownloadPickerList(session, directory) {
-  if (!session?.connected || session.socket.readyState !== WebSocket.OPEN) return;
+  if (!session?.connected || !socketIsOpen(session.socket)) return;
   if (!directory) return;
   filePickerDirectoryInput.placeholder = '正在读取目录…';
-  filePickerList.replaceChildren();
+  clearChildren(filePickerList);
   const loading = document.createElement('div');
   loading.className = 'file-picker-empty';
   loading.textContent = '正在读取目录…';
@@ -123,13 +186,28 @@ function setUploadDirectoryChecking(checking) {
   uploadDirectoryForm.classList.toggle('is-checking', checking);
   uploadDirectoryForm.querySelector('button').disabled = checking;
 }
+function setUploadDirectoryReady(ready) {
+  const btn = uploadDirectoryForm.querySelector('button');
+  if (ready) {
+    btn.type = 'button';
+    btn.textContent = '选择文件';
+    btn.dataset.ready = '1';
+    btn.classList.add('upload-pick-ready');
+  } else {
+    btn.type = 'submit';
+    btn.textContent = '选择目录';
+    delete btn.dataset.ready;
+    btn.classList.remove('upload-pick-ready');
+  }
+}
 function validateUploadDirectory() {
   const session = activeSession();
   const directory = uploadDirectoryInput.value.trim();
   if (!directory) return uploadDirectoryInput.focus();
-  if (!session?.connected || session.socket.readyState !== WebSocket.OPEN) return;
-  const requestId = crypto.randomUUID();
+  if (!session?.connected || !socketIsOpen(session.socket)) return;
+  const requestId = generateUUID();
   uploadDirectoryValidation = { requestId, sessionId: session.id, directory };
+  setUploadDirectoryReady(false);
   setUploadDirectoryError();
   setUploadDirectoryChecking(true);
   session.socket.send(JSON.stringify({ type: 'validate-upload-directory', requestId, directory }));
@@ -139,27 +217,38 @@ function openUploadPicker(fillHome = true) {
   uploadPickerBackdrop.hidden = false;
   const session = activeSession();
   if (fillHome && session?.home) uploadDirectoryInput.value = session.home;
+  setUploadDirectoryReady(false);
   uploadDirectoryInput.focus();
 }
-function closeUploadPicker() { uploadPicker.hidden = true; uploadPickerBackdrop.hidden = true; uploadDirectoryValidation = undefined; setUploadDirectoryChecking(false); setUploadDirectoryError(); }
+function closeUploadPicker() { uploadPicker.hidden = true; uploadPickerBackdrop.hidden = true; uploadDirectoryValidation = undefined; setUploadDirectoryChecking(false); setUploadDirectoryReady(false); setUploadDirectoryError(); }
+let uploadConflictCloseTimer = null;
 function openUploadConflict(session, message) {
+  if (uploadConflictCloseTimer) { clearTimeout(uploadConflictCloseTimer); uploadConflictCloseTimer = null; }
   uploadConflictDialog.dataset.sessionId = session.id;
   uploadConflictDialog.dataset.transferId = message.id;
-  uploadConflictMessage.replaceChildren();
+  clearChildren(uploadConflictMessage);
   const name = document.createElement('strong');
   name.textContent = message.name;
   const path = document.createElement('span');
   path.textContent = message.remotePath;
   uploadConflictMessage.append(name, path);
-  uploadConflictDialog.hidden = false;
   uploadConflictBackdrop.hidden = false;
+  uploadConflictDialog.hidden = false;
+  void uploadConflictDialog.offsetHeight;
+  uploadConflictBackdrop.classList.add('visible');
+  uploadConflictDialog.classList.add('visible');
   uploadConflictOverwriteButton.focus();
 }
 function closeUploadConflict() {
-  uploadConflictDialog.hidden = true;
-  uploadConflictBackdrop.hidden = true;
-  delete uploadConflictDialog.dataset.sessionId;
-  delete uploadConflictDialog.dataset.transferId;
+  uploadConflictDialog.classList.remove('visible');
+  uploadConflictBackdrop.classList.remove('visible');
+  uploadConflictCloseTimer = setTimeout(() => {
+    uploadConflictCloseTimer = null;
+    uploadConflictDialog.hidden = true;
+    uploadConflictBackdrop.hidden = true;
+    delete uploadConflictDialog.dataset.sessionId;
+    delete uploadConflictDialog.dataset.transferId;
+  }, 180);
 }
 function resolveUploadConflict(action) {
   const session = sessions.get(uploadConflictDialog.dataset.sessionId);
@@ -173,19 +262,19 @@ function resolveUploadConflict(action) {
     removeTransfer(id, element);
     return;
   }
-  if (session.connected && session.socket.readyState === WebSocket.OPEN) {
+  if (session.connected && socketIsOpen(session.socket)) {
     session.socket.send(JSON.stringify({ type: 'upload-start', id, name: upload.file.name, size: upload.file.size, directory: upload.directory, conflictAction: action }));
   }
 }
 function showDirectoryInput(message) {
   filePickerDirectoryInput.placeholder = message;
-  filePickerList.replaceChildren();
+  clearChildren(filePickerList);
   filePickerDirectoryInput.focus();
 }
 function renderFileList(session, message) {
   filePickerDirectoryInput.value = message.path;
   filePickerDirectoryInput.placeholder = '输入远程目录，例如 /home/user';
-  filePickerList.replaceChildren();
+  clearChildren(filePickerList);
   if (!message.files.length) { filePickerList.innerHTML = '<div class="file-picker-empty">当前目录没有可下载的文件</div>'; return; }
   message.files.forEach((file) => {
     const button = document.createElement('button');
@@ -193,8 +282,8 @@ function renderFileList(session, message) {
     button.innerHTML = `<span></span><span>${formatBytes(file.size)}</span>`;
     button.querySelector('span').textContent = file.name;
     button.addEventListener('click', async () => {
-      if (!session.connected || session.socket.readyState !== WebSocket.OPEN) return;
-      const id = crypto.randomUUID();
+      if (!session.connected || !socketIsOpen(session.socket)) return;
+      const id = generateUUID();
       let saveHandle;
       if ('showSaveFilePicker' in window) {
         try {
@@ -222,7 +311,7 @@ function removeTransfer(id, element) {
   if (task && !task.done && !task.error) {
     for (const session of sessions.values()) {
       if (session.downloads.has(id) || session.uploads.has(id)) {
-        if (session.socket.readyState === WebSocket.OPEN) session.socket.send(JSON.stringify({ type: 'cancel-transfer', id }));
+        if (socketIsOpen(session.socket)) session.socket.send(JSON.stringify({ type: 'cancel-transfer', id }));
         session.downloads.delete(id);
         session.uploads.delete(id);
         break;
@@ -240,7 +329,7 @@ function updateTransfer(id, details) {
     element = document.createElement('div');
     element.className = 'transfer-task';
     element.dataset.transferId = id;
-    element.innerHTML = '<div class="transfer-task-header"><span class="transfer-task-icon" aria-hidden="true"></span><div class="transfer-task-details"><span class="transfer-task-name"></span><span class="transfer-task-meta"></span></div><button class="transfer-task-close" type="button" aria-label="关闭传输进度" title="关闭">×</button></div><div class="transfer-task-progress"><span></span></div>';
+    element.innerHTML = '<div class="transfer-task-header"><span class="transfer-task-icon" aria-hidden="true"></span><div class="transfer-task-details"><span class="transfer-task-name"></span><span class="transfer-task-meta"></span></div><button class="transfer-task-close" type="button" aria-label="关闭传输进度" title="关闭"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div><div class="transfer-task-progress"><span></span></div>';
     element.querySelector('.transfer-task-close').addEventListener('click', () => removeTransfer(id, element));
     transferPanel.append(element);
   }
@@ -248,7 +337,13 @@ function updateTransfer(id, details) {
   element.classList.toggle('error', Boolean(task.error));
   element.classList.toggle('completed', Boolean(task.done));
   const transferIcon = element.querySelector('.transfer-task-icon');
-  transferIcon.textContent = task.error ? '✖' : task.done ? '✔' : task.direction === 'upload' ? '↑' : '↓';
+  transferIcon.innerHTML = task.error
+    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>'
+    : task.done
+      ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg>'
+      : task.direction === 'upload'
+        ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V4"/><path d="m7 9 5-5 5 5"/><path d="M5 20h14"/></svg>'
+        : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>';
   transferIcon.setAttribute('aria-label', task.error ? '传输失败' : task.done ? '传输完成' : task.direction === 'upload' ? '正在上传' : '正在下载');
   element.querySelector('.transfer-task-name').textContent = task.name;
   const remainingSeconds = task.dismissDeadline ? Math.max(0, Math.ceil((task.dismissDeadline - Date.now()) / 1000)) : 0;
@@ -269,16 +364,16 @@ function updateTransfer(id, details) {
 function applyTerminalFontSettings() {
   fontSizeInput.value = terminalFontSettings.fontSize;
   fontSizeValue.textContent = `${terminalFontSettings.fontSize}px`;
-  fontWeightInput.value = terminalFontSettings.fontWeight;
-  fontWeightValue.textContent = terminalFontSettings.fontWeight;
+  fontWeightInput.value = String(terminalFontSettings.fontWeight);
+  fontWeightValue.textContent = String(terminalFontSettings.fontWeight);
   letterSpacingInput.value = terminalFontSettings.letterSpacing;
   letterSpacingValue.textContent = `${terminalFontSettings.letterSpacing}px`;
   fontColorInput.value = effectiveTerminalForeground();
   fontColorValue.textContent = effectiveTerminalForeground();
-  localStorage.setItem('webssh-font-size', terminalFontSettings.fontSize);
-  localStorage.setItem('webssh-font-weight', terminalFontSettings.fontWeight);
-  localStorage.setItem('webssh-letter-spacing', terminalFontSettings.letterSpacing);
-  if (terminalFontSettings.foreground) localStorage.setItem('webssh-font-color', terminalFontSettings.foreground);
+  updateSettings('fontSize', terminalFontSettings.fontSize);
+  updateSettings('fontWeight', terminalFontSettings.fontWeight);
+  updateSettings('letterSpacing', terminalFontSettings.letterSpacing);
+  updateSettings('fontColor', terminalFontSettings.foreground);
   sessions.forEach((session) => {
     session.terminal.options.fontSize = terminalFontSettings.fontSize;
     session.terminal.options.fontWeight = terminalFontSettings.fontWeight;
@@ -303,8 +398,10 @@ function applyTheme(theme) {
   const isLight = theme === 'light';
   document.body.dataset.theme = isLight ? 'light' : 'dark';
   document.documentElement.dataset.theme = isLight ? 'light' : 'dark';
-  localStorage.setItem('webssh-theme', document.body.dataset.theme);
-  themeButton.textContent = isLight ? '☾' : '☀';
+  updateSettings('theme', document.body.dataset.theme);
+  themeButton.innerHTML = isLight
+    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M18.7 5.3l-1.4 1.4M6.7 17.3l-1.4 1.4"/></svg>';
   themeButton.title = isLight ? '切换为深色主题' : '切换为浅色主题';
   themeButton.setAttribute('aria-label', themeButton.title);
   sessions.forEach((session) => {
@@ -368,7 +465,6 @@ function prepareEditSession(id) {
   setAuthMode(connection.authMode || 'password');
   form.elements.password.value = connection.password || '';
   form.elements.privateKey.value = connection.privateKey || '';
-  form.elements.passphrase.value = connection.passphrase || '';
   clearProfileSelection();
   clearProfileFeedback();
   openDrawer(session.tab);
@@ -390,7 +486,6 @@ function setAuthMode(mode) {
   keyFields.hidden = authMode !== 'key';
   form.elements.password.disabled = authMode !== 'password';
   form.elements.privateKey.disabled = authMode !== 'key';
-  form.elements.passphrase.disabled = authMode !== 'key';
 }
 function activeSession() { return sessions.get(activeSessionId); }
 function formatDuration(milliseconds = 0) {
@@ -412,9 +507,10 @@ function healthItem(label, value, tone = '') {
 }
 function refreshConnectionHealth() {
   const session = activeSession();
-  if (!session?.connected || !session.health) { connectionHealth.replaceChildren(); return; }
+  if (!session?.connected || !session.health) { clearChildren(connectionHealth); return; }
   const { hostname, cpu, memory, latency } = session.health;
-  connectionHealth.replaceChildren(
+  clearChildren(connectionHealth);
+  connectionHealth.append(
     healthItem('主机', hostname || '未知'),
     healthItem('延迟', latency === undefined ? '--' : `${latency} ms`, latency > 300 ? 'warning' : ''),
     healthItem('CPU', cpu === undefined ? '--' : `${cpu}%`, cpu >= 85 ? 'warning' : ''),
@@ -425,19 +521,19 @@ function refreshConnectionHealth() {
 function setStatus(text, connected = false) {
   statusElement.textContent = text;
   statusDot.classList.toggle('connected', connected);
-  if (!connected) connectionHealth.replaceChildren();
+  if (!connected) clearChildren(connectionHealth);
 }
 function refreshActiveStatus() {
   const session = activeSession();
   if (!session) return setStatus('未连接');
   if (session.connected) { setStatus('已连接', true); refreshConnectionHealth(); return; }
-  if (session.socket.readyState === WebSocket.CONNECTING) return setStatus('连接中…');
+  if (socketIsConnecting(session.socket)) return setStatus('连接中…');
   setStatus('未连接');
 }
 function fitSession(session) {
   if (!session || session.id !== activeSessionId) return;
   session.fitAddon.fit();
-  if (session.socket.readyState === WebSocket.OPEN) session.socket.send(JSON.stringify({ type: 'resize', cols: session.terminal.cols, rows: session.terminal.rows }));
+  if (socketIsOpen(session.socket)) session.socket.send(JSON.stringify({ type: 'resize', cols: session.terminal.cols, rows: session.terminal.rows }));
 }
 function activateSession(id) {
   if (!sessions.has(id)) return;
@@ -465,14 +561,14 @@ function closeSession(id) {
   sessions.delete(id);
   updateSessionTabsOverflow();
   if (activeSessionId === id) {
-    activeSessionId = remainingIds.at(-1) || null;
+    activeSessionId = remainingIds[remainingIds.length - 1] || null;
     if (activeSessionId) activateSession(activeSessionId);
     else refreshActiveStatus();
   }
   updateEmptyState();
 }
 function createSession(label = '新会话') {
-  const id = crypto.randomUUID();
+  const id = generateUUID();
   const host = document.createElement('div');
   host.className = 'terminal-host';
   const mount = document.createElement('div');
@@ -482,8 +578,9 @@ function createSession(label = '新会话') {
   tab.className = 'session-tab';
   tab.setAttribute('role', 'tab');
   tab.tabIndex = 0;
-  tab.title = '单击切换会话，双击编辑连接';
-  tab.innerHTML = '<span class="tab-label"></span><button class="tab-close" type="button" aria-label="关闭会话" title="关闭会话">×</button>';
+  tab.dataset.sessionId = id;
+  tab.title = '单击切换会话，双击编辑连接，中键关闭，拖拽排序';
+  tab.innerHTML = '<span class="tab-label"></span><button class="tab-close" type="button" aria-label="关闭会话" title="关闭会话"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>';
   tab.querySelector('.tab-label').textContent = label;
   sessionTabs.append(tab);
   updateSessionTabsOverflow();
@@ -496,24 +593,30 @@ function createSession(label = '新会话') {
   sessions.set(id, session);
   updateEmptyState();
   terminal.onData((data) => {
-    if (session.connected && session.socket.readyState === WebSocket.OPEN) return session.socket.send(JSON.stringify({ type: 'input', data }));
+    if (session.connected && socketIsOpen(session.socket)) return session.socket.send(JSON.stringify({ type: 'input', data }));
     if ((data === '\r' || data === '\n') && session.connection) reconnectSession(session);
   });
   terminal.onSelectionChange(() => {
     const selectedText = terminal.getSelection();
-    if (selectedText) navigator.clipboard?.writeText(selectedText).catch(() => {});
+    if (selectedText && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') navigator.clipboard.writeText(selectedText).catch(() => {});
   });
   mount.addEventListener('contextmenu', async (event) => {
     event.preventDefault();
-    if (!session.connected || session.socket.readyState !== WebSocket.OPEN) return;
-    try {
-      const text = await navigator.clipboard.readText();
-      if (text) session.socket.send(JSON.stringify({ type: 'input', data: text }));
-    } catch {
+    if (!session.connected || !socketIsOpen(session.socket)) return;
+    if (navigator.clipboard && typeof navigator.clipboard.readText === 'function') {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text) session.socket.send(JSON.stringify({ type: 'input', data: text }));
+      } catch {
+        terminal.focus();
+      }
+    } else {
       terminal.focus();
+      try { session.terminal.paste?.(''); } catch { /* 旧版 xterm 无 paste 方法 */ }
     }
   });
   tab.addEventListener('click', (event) => {
+    if (suppressNextTabClick) { suppressNextTabClick = false; return; }
     if (event.target.closest('.tab-close')) return;
     activateSession(id);
     connectPending(session);
@@ -522,6 +625,13 @@ function createSession(label = '新会话') {
     if (event.target.closest('.tab-close')) return;
     prepareEditSession(id);
   });
+  const closeByMiddleClick = (event) => {
+    if (event.button !== 1) return;
+    event.preventDefault();
+    closeSession(id);
+  };
+  tab.addEventListener('auxclick', closeByMiddleClick);
+  tab.addEventListener('pointerdown', (event) => handleTabPointerDown(event, tab, id));
   tab.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); activateSession(id); }
   });
@@ -529,27 +639,159 @@ function createSession(label = '新会话') {
   activateSession(id);
   return session;
 }
+function isPinnedSession(session) {
+  return Boolean((session.connection && session.connection.pinned === true) || (session.pendingProfile && session.pendingProfile.pinned === true));
+}
+function moveSessionElements(movedId, referenceId, placeBefore) {
+  const moved = sessions.get(movedId);
+  const reference = sessions.get(referenceId);
+  if (!moved || !reference || movedId === referenceId) return;
+  sessionTabs.insertBefore(moved.tab, placeBefore ? reference.tab : reference.tab.nextSibling);
+  terminalArea.insertBefore(moved.host, placeBefore ? reference.host : reference.host.nextSibling);
+  [...sessionTabs.children].forEach((node) => {
+    const target = sessions.get(node.dataset.sessionId);
+    if (!target) return;
+    sessions.delete(target.id);
+    sessions.set(target.id, target);
+  });
+}
+let dragState = null;
+let suppressNextTabClick = false;
+const TAB_DRAG_THRESHOLD = 5;
+function handleTabPointerDown(event, tab, id) {
+  if (event.button !== 0 || event.target.closest('.tab-close')) return;
+  event.preventDefault();
+  tab.classList.add('tab-pressing');
+  dragState = { id, tab, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, active: false, ghost: null, offsetX: 0, offsetY: 0, originalTabIndex: -1, lastReferenceId: null, lastPlaceBefore: null };
+}
+function startTabDrag(state, event) {
+  const rect = state.tab.getBoundingClientRect();
+  state.offsetX = event.clientX - rect.left;
+  state.offsetY = event.clientY - rect.top;
+  state.originalTabIndex = [...sessionTabs.children].indexOf(state.tab);
+  state.initialTabTop = rect.top;
+  state.initialTabWidth = rect.width;
+  state.tab.classList.add('dragging');
+  state.tab.classList.remove('tab-pressing');
+  sessionTabs.style.touchAction = 'none';
+  sessionTabs.style.userSelect = 'none';
+  sessionTabs.style.scrollBehavior = 'auto';
+  const ghost = state.tab.cloneNode(true);
+  ghost.classList.remove('dragging');
+  ghost.classList.remove('tab-pressing');
+  ghost.classList.remove('active');
+  ghost.classList.add('session-tab-ghost');
+  document.body.append(ghost);
+  state.ghost = ghost;
+  event.preventDefault();
+  updateTabDrag(event);
+}
+function updateTabDrag(event) {
+  if (!dragState || event.pointerId !== dragState.pointerId) return;
+  const state = dragState;
+  event.preventDefault();
+  const containerRect = sessionTabs.getBoundingClientRect();
+  const minLeft = containerRect.left;
+  const maxLeft = containerRect.right - state.initialTabWidth;
+  const clampedLeft = Math.min(Math.max(event.clientX - state.offsetX, minLeft), maxLeft);
+  state.ghost.style.left = `${clampedLeft}px`;
+  state.ghost.style.top = `${state.initialTabTop}px`;
+  if (event.clientX < containerRect.left + 28) sessionTabs.scrollLeft -= 12;
+  else if (event.clientX > containerRect.right - 28) sessionTabs.scrollLeft += 12;
+  const siblings = [...sessionTabs.querySelectorAll('.session-tab:not(.dragging)')];
+  const targetTab = siblings.find((item) => {
+    const itemRect = item.getBoundingClientRect();
+    return event.clientX < itemRect.left + itemRect.width / 2;
+  });
+  const referenceId = targetTab ? targetTab.dataset.sessionId : null;
+  const placeBefore = Boolean(targetTab);
+  if (referenceId !== state.lastReferenceId || placeBefore !== state.lastPlaceBefore) {
+    state.lastReferenceId = referenceId;
+    state.lastPlaceBefore = placeBefore;
+    if (targetTab) moveSessionElements(state.id, targetTab.dataset.sessionId, true);
+    else if (siblings.length) moveSessionElements(state.id, siblings[siblings.length - 1].dataset.sessionId, false);
+  }
+}
+function finishTabDrag(cancelled) {
+  const state = dragState;
+  if (!state) return;
+  dragState = null;
+  const session = sessions.get(state.id);
+  if (cancelled && state.active && session) {
+    const tabs = [...sessionTabs.children];
+    const hosts = [...terminalArea.children];
+    sessionTabs.insertBefore(state.tab, tabs[state.originalTabIndex] || null);
+    terminalArea.insertBefore(session.host, hosts[state.originalTabIndex] || null);
+  }
+  state.ghost?.remove();
+  state.tab.classList.remove('dragging');
+  state.tab.classList.remove('tab-pressing');
+  sessionTabs.style.touchAction = '';
+  sessionTabs.style.userSelect = '';
+  sessionTabs.style.scrollBehavior = '';
+  updateSessionTabsOverflow();
+  persistPinnedOrder();
+  if (state.active && !cancelled) {
+    suppressNextTabClick = true;
+    setTimeout(() => { suppressNextTabClick = false; }, 0);
+  }
+}
+window.addEventListener('pointermove', (event) => {
+  if (!dragState || event.pointerId !== dragState.pointerId) return;
+  if (!dragState.active) {
+    if (Math.hypot(event.clientX - dragState.startX, event.clientY - dragState.startY) < TAB_DRAG_THRESHOLD) return;
+    dragState.active = true;
+    startTabDrag(dragState, event);
+    return;
+  }
+  updateTabDrag(event);
+});
+window.addEventListener('pointerup', (event) => {
+  if (!dragState || event.pointerId !== dragState.pointerId) return;
+  if (dragState.active) finishTabDrag(false);
+  else {
+    dragState.tab.classList.remove('tab-pressing');
+    dragState = null;
+  }
+});
+window.addEventListener('pointercancel', (event) => {
+  if (dragState && event.pointerId === dragState.pointerId) finishTabDrag(true);
+});
+window.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && dragState) finishTabDrag(true);
+});
+window.addEventListener('blur', () => finishTabDrag(true));
+function persistPinnedOrder() {
+  const order = [...sessionTabs.children]
+    .map((node) => sessions.get(node.dataset.sessionId))
+    .filter((session) => session && isPinnedSession(session))
+    .map((session) => (session.connection && session.connection.name) || (session.pendingProfile && session.pendingProfile.name))
+    .filter(Boolean);
+  updateSettings('pinnedOrder', order);
+}
 function profileId(profile) { return profile.name; }
 function clearProfileSelection() {
   profileList.querySelectorAll('.saved-profile.active').forEach((item) => item.classList.remove('active'));
 }
 function renderProfiles(selectedId = '') {
-  profileList.replaceChildren();
+  clearChildren(profileList);
   savedConnectionsSection.hidden = profiles.length === 0;
   profiles.slice().sort((a, b) => a.name.localeCompare(b.name, 'zh-CN')).forEach((profile) => {
       const item = document.createElement('div');
       item.className = 'saved-profile';
       item.classList.toggle('active', profileId(profile) === selectedId);
-      const selectButton = document.createElement('button');
-      selectButton.type = 'button';
+      const selectButton = document.createElement('div');
       selectButton.className = 'saved-profile-select';
-      selectButton.textContent = profile.name;
+      selectButton.setAttribute('role', 'button');
+      selectButton.setAttribute('tabindex', '0');
+      selectButton.innerHTML = `<div class="profile-name">${profile.name}</div><div class="profile-info">${profile.host}${profile.port && profile.port !== 22 ? ':' + profile.port : ''} · ${profile.username || ''}</div>`;
       selectButton.title = `使用 ${profile.name} 填充连接信息`;
       selectButton.addEventListener('click', () => { clearProfileSelection(); item.classList.add('active'); fillProfile(profile); clearProfileFeedback(); });
+      selectButton.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectButton.click(); } });
       const pinButton = document.createElement('button');
       pinButton.type = 'button';
       pinButton.className = 'saved-profile-pin';
-      pinButton.textContent = '📌';
+      pinButton.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5"/><path d="M9 10.76V6a3 3 0 0 1 6 0v4.76l2.17 3.46a1 1 0 0 1-.86 1.53H7.69a1 1 0 0 1-.86-1.53L9 10.76z"/><path d="M9.5 6.5h5"/></svg>';
       pinButton.classList.toggle('active', profile.pinned === true);
       pinButton.setAttribute('aria-label', profile.pinned === true ? `取消 ${profile.name} 的常驻` : `将 ${profile.name} 设为常驻`);
       pinButton.title = profile.pinned === true ? `取消常驻（下次打开不再自动出现）` : `设为常驻（下次打开时自动出现在会话栏）`;
@@ -557,7 +799,7 @@ function renderProfiles(selectedId = '') {
       const deleteButton = document.createElement('button');
       deleteButton.type = 'button';
       deleteButton.className = 'saved-profile-delete';
-      deleteButton.textContent = '🗑';
+      deleteButton.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
       deleteButton.setAttribute('aria-label', `删除 ${profile.name}`);
       deleteButton.title = `删除 ${profile.name}`;
       deleteButton.addEventListener('click', () => deleteProfile(profile));
@@ -565,28 +807,45 @@ function renderProfiles(selectedId = '') {
     profileList.append(item);
   });
 }
+async function persistProfile(profile) {
+  const response = await fetch('/api/profiles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(profile) });
+  const result = await response.json();
+  if (!response.ok) return { ...result, ok: false };
+  const index = profiles.findIndex((item) => profileId(item) === profileId(result.profile));
+  if (index >= 0) profiles[index] = result.profile; else profiles.push(result.profile);
+  return { ...result, ok: true };
+}
 async function togglePinned(profile) {
   const next = { ...profile, pinned: profile.pinned !== true };
   try {
-    const response = await fetch('/api/profiles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next) });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.message);
-    const index = profiles.findIndex((item) => profileId(item) === profileId(result.profile));
-    if (index >= 0) profiles[index] = result.profile; else profiles.push(result.profile);
+    const result = await persistProfile(next);
+    if (!result.ok) {
+      showProfileFeedback(result.message || '更新常驻设置失败。', 'error');
+      return;
+    }
     renderProfiles();
-    if (next.pinned) openPinnedSession(result.profile);
-  } catch (error) { showProfileFeedback(error.message || '更新常驻设置失败。', 'error'); }
+    if (next.pinned) {
+      showPinnedSession(result.profile);
+      persistPinnedOrder();
+    }
+  } catch { showProfileFeedback('更新常驻设置失败。', 'error'); }
 }
-function openPinnedSession(profile) {
+function showPinnedSession(profile) {
   const existing = [...sessions.values()].find((session) => (session.connection && session.connection.name === profile.name) || (session.pendingProfile && session.pendingProfile.name === profile.name));
-  if (existing) {
-    activateSession(existing.id);
-    connectPending(existing);
-    return;
-  }
+  if (existing) return;
+  const previousId = activeSessionId;
   const session = createSession(profile.name || profile.host);
-  session.terminal.clear();
-  establishConnection(session, profile);
+  session.pendingProfile = profile;
+  if (previousId && sessions.has(previousId)) activateSession(previousId);
+  else {
+    activeSessionId = null;
+    sessions.forEach((item) => {
+      item.host.classList.remove('active');
+      item.tab.classList.remove('active');
+    });
+    refreshActiveStatus();
+    updateEmptyState();
+  }
 }
 function connectPending(session) {
   if (!session.pendingProfile || session.connection) return;
@@ -595,9 +854,20 @@ function connectPending(session) {
   establishConnection(session, profile);
 }
 function restorePinnedSessions() {
+  const pinnedProfiles = profiles.filter((profile) => profile.pinned === true);
+  if (!pinnedProfiles.length) return;
+  let savedOrder = [];
+  try { savedOrder = settingsStore.pinnedOrder || []; } catch { /* 忽略 */ }
+  const remaining = new Map(pinnedProfiles.map((profile) => [profile.name, profile]));
+  const orderedProfiles = [];
+  savedOrder.forEach((name) => {
+    if (!remaining.has(name)) return;
+    orderedProfiles.push(remaining.get(name));
+    remaining.delete(name);
+  });
+  remaining.forEach((profile) => orderedProfiles.push(profile));
   let restored = false;
-  for (const profile of profiles) {
-    if (profile.pinned !== true) continue;
+  for (const profile of orderedProfiles) {
     const exists = [...sessions.values()].some((session) => (session.connection && session.connection.name === profile.name) || (session.pendingProfile && session.pendingProfile.name === profile.name));
     if (exists) continue;
     const session = createSession(profile.name || profile.host);
@@ -616,18 +886,24 @@ function restorePinnedSessions() {
 async function deleteProfile(profile) {
   try {
     const response = await fetch(`/api/profiles/${encodeURIComponent(profile.name)}`, { method: 'DELETE' });
-    if (!response.ok) throw new Error();
+    if (!response.ok) return showProfileFeedback('删除连接配置失败。', 'error');
     profiles = profiles.filter((item) => profileId(item) !== profileId(profile));
     renderProfiles();
     prepareNewConnection();
   } catch { showProfileFeedback('删除连接配置失败。', 'error'); }
 }
 function fillProfile(profile) {
-  for (const field of ['name', 'host', 'port', 'username', 'password', 'privateKey', 'passphrase']) form.elements[field].value = profile[field] || '';
+  for (const field of ['name', 'host', 'port', 'username', 'password', 'privateKey']) form.elements[field].value = profile[field] || '';
   setAuthMode(profile.authMode);
 }
 async function loadProfiles() {
-  try { const response = await fetch('/api/profiles'); if (!response.ok) throw new Error(); profiles = await response.json(); renderProfiles(); restorePinnedSessions(); } catch { activeSession()?.terminal.writeln('\r\n\x1b[31m无法加载已保存的连接。\x1b[0m'); }
+  try {
+    const response = await fetch('/api/profiles');
+    if (!response.ok) return activeSession()?.terminal.writeln('\r\n\x1b[31m无法加载已保存的连接。\x1b[0m');
+    profiles = await response.json();
+    renderProfiles();
+    restorePinnedSessions();
+  } catch { activeSession()?.terminal.writeln('\r\n\x1b[31m无法加载已保存的连接。\x1b[0m'); }
 }
 function scheduleReconnect(session) {
   if (session.manuallyClosed || !session.connection || session.reconnectTimer) return;
@@ -689,7 +965,11 @@ function establishConnection(session, values) {
         try {
           const parts = download.chunks.map((chunk) => Uint8Array.from(atob(chunk), (character) => character.charCodeAt(0)));
           const blob = new Blob(parts);
-          if (blob.size !== Number(download.size)) throw new Error(`文件大小校验失败：应为 ${formatBytes(download.size)}，实际为 ${formatBytes(blob.size)}。`);
+          if (blob.size !== Number(download.size)) {
+            session.downloads.delete(message.id);
+            updateTransfer(message.id, { error: `下载文件未保存：文件大小校验失败，应为 ${formatBytes(download.size)}，实际为 ${formatBytes(blob.size)}。` });
+            return;
+          }
           if (download.saveHandle) {
             const writable = await download.saveHandle.createWritable();
             await writable.write(blob);
@@ -717,7 +997,7 @@ function establishConnection(session, values) {
       setUploadDirectoryChecking(false);
       if (message.type === 'upload-directory-invalid') return setUploadDirectoryError(message.message);
       uploadDirectoryInput.value = message.directory;
-      uploadInput.click();
+      setUploadDirectoryReady(true);
     }
     if (message.type === 'upload-ready') {
       if (message.name) updateTransfer(message.id, { name: message.name });
@@ -737,7 +1017,7 @@ function establishConnection(session, values) {
         uploadDirectoryInput.value = upload.directory;
         openUploadPicker(false);
         uploadDirectoryInput.focus();
-      } else updateTransfer(message.id || crypto.randomUUID(), { direction: message.direction || 'upload', name: transfers.get(message.id)?.name || '文件传输', error: message.message });
+      } else updateTransfer(message.id || generateUUID(), { direction: message.direction || 'upload', name: transfers.get(message.id)?.name || '文件传输', error: message.message });
     }
     if (message.type === 'error') session.terminal.writeln(`\r\n\x1b[31m${message.message}\x1b[0m`);
     if (message.type === 'closed') {
@@ -750,7 +1030,7 @@ function establishConnection(session, values) {
   session.socket.addEventListener('error', () => { session.connected = false; session.health = undefined; if (session.id === activeSessionId) refreshActiveStatus(); scheduleReconnect(session); });
 }
 function reconnectSession(session) {
-  if (session.connected || session.socket.readyState === WebSocket.CONNECTING) return;
+  if (session.connected || socketIsConnecting(session.socket)) return;
   clearTimeout(session.reconnectTimer);
   session.reconnectTimer = undefined;
   session.socket.close?.();
@@ -759,23 +1039,23 @@ function reconnectSession(session) {
 async function startUpload(session, id) {
   const upload = session.uploads.get(id);
   const file = upload?.file;
-  if (!file || session.socket.readyState !== WebSocket.OPEN) return;
+  if (!file || !socketIsOpen(session.socket)) return;
   const chunkSize = 48 * 1024;
   for (let offset = 0; offset < file.size; offset += chunkSize) {
-    if (!session.uploads.has(id) || session.socket.readyState !== WebSocket.OPEN) return;
-    const bytes = new Uint8Array(await file.slice(offset, offset + chunkSize).arrayBuffer());
-    if (!session.uploads.has(id) || session.socket.readyState !== WebSocket.OPEN) return;
+    if (!session.uploads.has(id) || !socketIsOpen(session.socket)) return;
+    const bytes = new Uint8Array(await readBlobArrayBuffer(file.slice(offset, offset + chunkSize)));
+    if (!session.uploads.has(id) || !socketIsOpen(session.socket)) return;
     let binary = '';
     bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
     session.socket.send(JSON.stringify({ type: 'upload-chunk', id, data: btoa(binary) }));
   }
-  if (!session.uploads.has(id) || session.socket.readyState !== WebSocket.OPEN) return;
+  if (!session.uploads.has(id) || !socketIsOpen(session.socket)) return;
   session.uploads.delete(id);
   session.socket.send(JSON.stringify({ type: 'upload-end', id }));
 }
 function connect(closeAfterConnect = true) {
   if (!form.reportValidity()) return;
-  const values = Object.fromEntries(new FormData(form));
+  const values = formDataToObject(new FormData(form));
   if (authMode === 'password' && !values.password) return showProfileFeedback('请输入密码。', 'error');
   if (authMode === 'key' && !values.privateKey) return showProfileFeedback('请输入私钥内容。', 'error');
   const editingSession = editingSessionId ? sessions.get(editingSessionId) : undefined;
@@ -783,7 +1063,7 @@ function connect(closeAfterConnect = true) {
     const previous = editingSession.connection || {};
     const mode = values.authMode || authMode;
     const next = { ...values, authMode: mode, password: mode === 'password' ? values.password : '', privateKey: mode === 'key' ? values.privateKey : '' };
-    const connectionFields = ['host', 'port', 'username', 'authMode', 'password', 'privateKey', 'passphrase'];
+    const connectionFields = ['host', 'port', 'username', 'authMode', 'password', 'privateKey'];
     const changed = connectionFields.some((key) => String(next[key] ?? '') !== String(previous[key] ?? ''));
     editingSessionId = null;
     document.querySelector('#connection-drawer-title').textContent = '新建连接';
@@ -808,7 +1088,7 @@ document.querySelectorAll('[data-password-toggle]').forEach((button) => button.a
   const input = button.previousElementSibling;
   const visible = input.type === 'password';
   input.type = visible ? 'text' : 'password';
-  const fieldName = input.name === 'passphrase' ? '私钥口令' : '密码';
+  const fieldName = '密码';
   button.setAttribute('aria-pressed', String(visible));
   button.setAttribute('aria-label', `${visible ? '隐藏' : '显示'}${fieldName}`);
   button.title = `${visible ? '隐藏' : '显示'}${fieldName}`;
@@ -903,7 +1183,7 @@ backgroundFileInput.addEventListener('change', async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ data, contentType: mime, opacity: backgroundState.opacity })
     });
-    if (!response.ok) throw new Error('upload-failed');
+    if (!response.ok) return showProfileFeedback('上传背景图片失败。', 'error');
     backgroundState = await response.json();
     applyBackground();
     showProfileFeedback('背景图片已更新。');
@@ -931,7 +1211,7 @@ backgroundOpacityInput.addEventListener('change', async () => {
 backgroundRemoveButton.addEventListener('click', async () => {
   try {
     const response = await fetch('/api/background', { method: 'DELETE' });
-    if (!response.ok) throw new Error('remove-failed');
+    if (!response.ok) return showProfileFeedback('清除背景失败。', 'error');
     backgroundState = await response.json();
     applyBackground();
   } catch {
@@ -953,14 +1233,13 @@ function updateSessionTabsOverflow() {
   container.classList.toggle('is-overflowing', overflowing);
   if (!overflowing) sessionTabs.style.width = `${sessionTabs.scrollWidth}px`;
 }
-new ResizeObserver(updateSessionTabsOverflow).observe(sessionTabs);
+if (typeof ResizeObserver !== 'undefined') new ResizeObserver(updateSessionTabsOverflow).observe(sessionTabs.closest('.session-tabs'));
 sessionTabs.addEventListener('wheel', (event) => {
   if (!event.deltaY || sessionTabs.scrollWidth <= sessionTabs.clientWidth) return;
   event.preventDefault();
   sessionTabs.scrollLeft += event.deltaY;
 }, { passive: false });
 newSessionButton.addEventListener('click', () => { prepareNewConnection(); openDrawer(newSessionButton); });
-openDrawerButton.addEventListener('click', () => { prepareNewConnection(); openDrawer(openDrawerButton); });
 emptyStateConnectButton.addEventListener('click', () => { prepareNewConnection(); openDrawer(emptyStateConnectButton); });
 drawerBackdrop.addEventListener('click', closeDrawer);
 closeDrawerButton.addEventListener('click', closeDrawer);
@@ -979,9 +1258,14 @@ uploadDirectoryForm.addEventListener('submit', (event) => {
   event.preventDefault();
   validateUploadDirectory();
 });
+const uploadDirectoryButton = uploadDirectoryForm.querySelector('button');
+uploadDirectoryButton.addEventListener('click', () => {
+  if (uploadDirectoryButton.dataset.ready === '1') uploadInput.click();
+});
 uploadDirectoryInput.addEventListener('input', () => {
   uploadDirectoryValidation = undefined;
   setUploadDirectoryChecking(false);
+  setUploadDirectoryReady(false);
   setUploadDirectoryError();
 });
 uploadInput.addEventListener('change', () => {
@@ -991,20 +1275,20 @@ uploadInput.addEventListener('change', () => {
   uploadInput.value = '';
   if (!file || !session?.connected || !directory) return;
   closeUploadPicker();
-  const id = crypto.randomUUID();
+  const id = generateUUID();
   updateTransfer(id, { direction: 'upload', name: file.name, size: file.size, transferred: 0 });
   session.uploads.set(id, { file, directory });
   session.socket.send(JSON.stringify({ type: 'upload-start', id, name: file.name, size: file.size, directory }));
 });
-downloadButton.addEventListener('click', () => { const session = activeSession(); if (!session?.connected) return session?.terminal.writeln('\r\n\x1b[31m请先连接 SSH 会话。\x1b[0m'); filePickerDirectoryInput.placeholder = '请输入远程目录，例如 /home/user'; filePickerList.replaceChildren(); openFilePicker(); filePickerDirectoryInput.focus(); });
+downloadButton.addEventListener('click', () => { const session = activeSession(); if (!session?.connected) return session?.terminal.writeln('\r\n\x1b[31m请先连接 SSH 会话。\x1b[0m'); filePickerDirectoryInput.placeholder = '请输入远程目录，例如 /home/user'; clearChildren(filePickerList); openFilePicker(); filePickerDirectoryInput.focus(); });
 filePickerDirectoryForm.addEventListener('submit', (event) => {
   event.preventDefault();
   const session = activeSession();
   const directory = filePickerDirectoryInput.value.trim();
-  if (!session?.connected || session.socket.readyState !== WebSocket.OPEN) return;
+  if (!session?.connected || !socketIsOpen(session.socket)) return;
   if (!directory) return showDirectoryInput('请输入要读取的远程目录。');
   filePickerDirectoryInput.placeholder = '正在读取指定目录…';
-  filePickerList.replaceChildren();
+  clearChildren(filePickerList);
   session.socket.send(JSON.stringify({ type: 'list-files', directory }));
 });
 closeFilePickerButton.addEventListener('click', closeFilePicker);
@@ -1017,26 +1301,33 @@ uploadConflictCancelButton.addEventListener('click', () => resolveUploadConflict
 uploadConflictBackdrop.addEventListener('click', () => resolveUploadConflict('cancel'));
 saveProfileButton.addEventListener('click', async () => {
   if (!form.reportValidity()) return;
-  const values = Object.fromEntries(new FormData(form));
-  const profile = { name: values.name.trim(), host: values.host, port: values.port, username: values.username, authMode, password: authMode === 'password' ? values.password : '', privateKey: authMode === 'key' ? values.privateKey : '', passphrase: authMode === 'key' ? values.passphrase : '' };
+  const values = formDataToObject(new FormData(form));
+  const profile = { name: values.name.trim(), host: values.host, port: values.port, username: values.username, authMode, password: authMode === 'password' ? values.password : '', privateKey: authMode === 'key' ? values.privateKey : '' };
   const existing = profiles.find((item) => profileId(item) === profileId(profile));
   if (existing) profile.pinned = existing.pinned === true;
   if (existing && !(await openProfileOverwrite(`主机 ${profile.host}:${profile.port} 已存在同名配置，是否覆盖？`))) return;
   try {
-    const response = await fetch('/api/profiles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(profile) });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.message);
-    const index = profiles.findIndex((item) => profileId(item) === profileId(result.profile));
-    if (index >= 0) profiles[index] = result.profile; else profiles.push(result.profile);
+    const result = await persistProfile(profile);
+    if (!result.ok) {
+      showProfileFeedback(result.message || '保存连接配置失败。', 'error');
+      return;
+    }
     renderProfiles(profileId(result.profile));
     fillProfile(result.profile);
-  } catch (error) { showProfileFeedback(error.message || '保存连接配置失败。', 'error'); }
+  } catch (error) {
+    showProfileFeedback(`保存连接配置失败：${error instanceof TypeError ? '无法连接服务器，请确认 WebSSH 服务已启动。' : error.message || '未知错误。'}`, 'error');
+  }
 });
 
 form.addEventListener('submit', (event) => { event.preventDefault(); connect(); });
-new ResizeObserver(() => requestAnimationFrame(() => fitSession(activeSession()))).observe(terminalArea);
-applyTheme(localStorage.getItem('webssh-theme') || 'dark');
-applyTerminalFontSettings();
+if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => requestAnimationFrame(() => fitSession(activeSession()))).observe(terminalArea);
+applyTheme(settingsStore.theme);
 updateEmptyState();
-loadBackground();
-loadProfiles();
+void loadBackground();
+
+void loadSettings().then(() => {
+  syncTerminalFontSettingsFromStore();
+  applyTheme(settingsStore.theme);
+  applyTerminalFontSettings();
+  void loadProfiles();
+});

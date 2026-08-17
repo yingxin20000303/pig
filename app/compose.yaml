@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: webssh:0.1.2
+    image: webssh:0.1.3
     container_name: webssh
     restart: unless-stopped
     environment:
@@ -11,6 +11,7 @@ services:
       WEBSSH_HOST: 0.0.0.0
       WEBSSH_PROFILES_PATH: /data/ssh-connections.json
       WEBSSH_PROFILES_KEY_PATH: /data/ssh-connections.key
+      WEBSSH_SETTINGS_PATH: /data/settings.json
     ports:
       - "127.0.0.1:1314:1314"
     volumes:

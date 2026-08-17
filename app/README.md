@@ -72,7 +72,7 @@ docker compose down -v
 ### 使用 docker run
 
 ```bash
-docker build -t webssh:0.1.2 .
+docker build -t webssh:0.1.3 .
 docker volume create webssh-data
 docker run -d \
   --name webssh \
@@ -82,8 +82,9 @@ docker run -d \
   -e WEBSSH_HOST=0.0.0.0 \
   -e WEBSSH_PROFILES_PATH=/data/ssh-connections.json \
   -e WEBSSH_PROFILES_KEY_PATH=/data/ssh-connections.key \
+  -e WEBSSH_SETTINGS_PATH=/data/settings.json \
   -v webssh-data:/data \
-  webssh:0.1.2
+  webssh:0.1.3
 ```
 
 ### 环境变量
@@ -95,6 +96,8 @@ docker run -d \
 | `WEBSSH_PROFILES_PATH` | `./ssh-connections.json` | `/data/ssh-connections.json` | AES-256-GCM 加密的连接配置保存位置，应指向持久化卷。 |
 | `WEBSSH_PROFILES_KEY_PATH` | `${WEBSSH_PROFILES_PATH}.key` | `/data/ssh-connections.key` | 本地生成的 32 字节配置密钥路径，应与配置一同持久化且不得公开。 |
 | `WEBSSH_PROFILES_KEY` | 未设置 | 未设置 | 可选：外部托管的 32 字节 Base64 或 64 位十六进制密钥；设置后不会生成本地密钥文件。 |
+| `WEBSSH_SETTINGS_PATH` | `./settings.json` | `/data/settings.json` | 用户偏好设置（主题、字体、排序等）保存位置，应指向持久化卷。 |
+| `WEBSSH_BACKGROUND_PATH` | `./background.json` | `/data/background.json` | 自定义背景图片配置保存位置。 |
 
 ### 安全注意事项
 
@@ -109,7 +112,7 @@ Docker Buildx 可发布 `linux/amd64` 与 `linux/arm64` 镜像：
 ```bash
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
-  --tag <registry>/<namespace>/webssh:0.1.2 \
+  --tag <registry>/<namespace>/webssh:0.1.3 \
   --tag <registry>/<namespace>/webssh:latest \
   --push \
   .
@@ -139,7 +142,7 @@ dist\WebSSH-Portable\WebSSH.exe
 同时会打包出统一命名的分发资产（含操作系统标识）：
 
 ```text
-dist\WebSSH-0.1.2-Windows.zip
+dist\WebSSH-0.1.3-Windows.zip
 ```
 
 ## 连接配置与安全

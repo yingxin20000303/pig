@@ -6,7 +6,6 @@
     "username": "your-username",
     "authMode": "password",
     "password": "",
-    "privateKey": "",
-    "passphrase": ""
+    "privateKey": ""
   }
 ]

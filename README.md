@@ -2,7 +2,7 @@
 
 一个本地运行的 Web SSH 工具，提供多会话终端、连接配置管理、SFTP 文件传输与连接状态信息。
 
-> 当前版本：[`0.1.2`](https://github.com/yingxin20000303/pig/releases/tag/v0.1.2) · [下载最新版本](https://github.com/yingxin20000303/pig/releases/latest) · [在线展示页](https://yingxin20000303.github.io/pig/)
+> 当前版本：[`0.1.3`](https://github.com/yingxin20000303/pig/releases/tag/v0.1.3) · [下载最新版本](https://github.com/yingxin20000303/pig/releases/latest) · [在线展示页](https://yingxin20000303.github.io/pig/)
 
 ## 功能概览
 
@@ -73,7 +73,7 @@ npm run dev
 
 #### 私钥认证
 
-切换到「私钥」标签页，填写主机、用户和私钥内容；如私钥设置了口令，请同时填写私钥口令。
+切换到「私钥」标签页，填写主机、用户和私钥内容即可。
 
 ![新建连接 - 私钥模式](docs/screenshots/03-new-connection-key.png)
 
@@ -85,8 +85,9 @@ npm run dev
 
 ![保存的连接列表](docs/screenshots/09-saved-connections.png)
 
+- 每个连接项显示会话名称和连接信息（主机:端口 · 用户名），便于快速识别。
 - 点击连接项可快速重连。
-- 使用图钉按钮切换置顶状态；置顶连接会显示在列表前方。
+- 使用图钉按钮切换置顶状态；置顶连接会按添加顺序显示在列表前方。
 - 使用删除按钮移除不再使用的连接。
 
 ## 终端与文件传输
@@ -98,8 +99,8 @@ npm run dev
 ### 上传目录
 
 1. 点击顶部「上传」按钮。
-2. 输入远程目标目录，例如 `/var/www/app`。
-3. 选择本地目录；目录内文件会保留层级上传。
+2. 输入远程目标目录，例如 `/var/www/app`，点击「选择目录」验证目录可用性。
+3. 验证通过后按钮变为绿色「选择文件」，点击后选择本地目录；目录内文件会保留层级上传。
 4. 等待进度完成，期间仍可继续使用终端。
 
 ![上传文件对话框](docs/screenshots/06-upload-picker.png)
@@ -154,6 +155,7 @@ npm run dev
 ## 安全提示
 
 - 保存的连接配置位于 `app/ssh-connections.json`，采用 **AES-256-GCM** 加密；首次保存时会生成同目录的 `ssh-connections.json.key`。
+- 用户偏好设置（主题、终端字体、固定会话排序）保存于 `app/settings.json`，换浏览器或清除缓存后不丢失。
 - 旧版明文配置会在首次读取时自动迁移为加密格式。备份或恢复时必须同时保留配置文件和对应密钥文件；也可使用 `WEBSSH_PROFILES_KEY` 托管 32 字节密钥。
 - 配置和密钥均已被 `.gitignore` 忽略，切勿提交、删除或分享给不可信方。
 - 本项目不提供用户登录、TLS 或公网访问保护。不要直接暴露至公网；远程访问请使用 VPN 或带 HTTPS、身份验证和访问控制的反向代理。

@@ -1,5 +1,5 @@
 appname=webssh
-version=0.1.2
+version=0.1.3
 display_name=${common.display_name}
 desc="${common.desc}"
 source=thirdparty
@@ -16,4 +16,4 @@ service_port=1314
 desktop_uidir=ui
 desktop_applaunchname=webssh.proxy.Application
 install_dep_apps=nodejs_v22
-changelog=Encrypted saved SSH profiles with AES-256-GCM, added atomic profile writes and trusted WebSocket origin validation.
+changelog=Unified app icons, improved drag-to-reorder with Pointer Events, localized xterm vendor assets, removed passphrase input, cross-browser compatibility fixes.

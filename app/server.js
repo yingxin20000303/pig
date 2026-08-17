@@ -10,6 +10,13 @@ import { WebSocketServer, WebSocket } from 'ws';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 app.disable('x-powered-by');
+app.use((request, response, next) => {
+  const startedAt = Date.now();
+  response.on('finish', () => {
+    console.log(`[${new Date().toISOString()}] ${request.method} ${request.originalUrl} -> ${response.statusCode} (${Date.now() - startedAt}ms) from ${request.ip}`);
+  });
+  next();
+});
 app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders: (res) => {
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -154,6 +161,12 @@ app.get('/api/profiles', async (_request, response) => {
   }
 });
 
+app.post('/api/log-client-error', express.json({ limit: '16kb' }), (request, response) => {
+  const message = typeof request.body?.message === 'string' ? request.body.message.slice(0, 2000) : '(无消息)';
+  console.error(`[${new Date().toISOString()}] [client] 页面错误：${message}`);
+  response.status(204).end();
+});
+
 app.post('/api/profiles', express.json({ limit: '64kb' }), async (request, response) => {
   const profile = publicProfile(request.body ?? {});
   if (!profile.name || !profile.host || !profile.username || !Number.isInteger(profile.port) || profile.port < 1 || profile.port > 65535) {
@@ -262,6 +275,61 @@ app.delete('/api/background', async (_request, response) => {
   }
 });
 
+const settingsPath = process.env.WEBSSH_SETTINGS_PATH || path.join(__dirname, 'settings.json');
+const DEFAULT_SETTINGS = {
+  theme: 'dark',
+  fontSize: 14,
+  fontWeight: 400,
+  letterSpacing: 0,
+  fontColor: null,
+  pinnedOrder: []
+};
+const SETTINGS_CLAMPS = { fontSize: [10, 24], fontWeight: [100, 900], letterSpacing: [-2, 8] };
+
+function clampSetting(key, value) {
+  if (key === 'theme') return value === 'light' ? 'light' : 'dark';
+  if (key === 'fontColor') return (typeof value === 'string' && value) || null;
+  if (key === 'pinnedOrder') return Array.isArray(value) ? value.filter((v) => typeof v === 'string') : [];
+  const range = SETTINGS_CLAMPS[key];
+  if (range) { const n = Number(value); return Number.isFinite(n) ? Math.min(range[1], Math.max(range[0], n)) : DEFAULT_SETTINGS[key]; }
+  return DEFAULT_SETTINGS[key];
+}
+
+async function readSettings() {
+  try {
+    const saved = JSON.parse(await fs.readFile(settingsPath, 'utf8'));
+    const result = { ...DEFAULT_SETTINGS };
+    for (const key of Object.keys(DEFAULT_SETTINGS)) result[key] = clampSetting(key, saved[key]);
+    return result;
+  } catch (error) {
+    if (error.code === 'ENOENT') return { ...DEFAULT_SETTINGS };
+    throw error;
+  }
+}
+
+app.get('/api/settings', async (_request, response) => {
+  try {
+    response.json(await readSettings());
+  } catch {
+    response.status(500).json({ message: '无法读取偏好设置。' });
+  }
+});
+
+app.put('/api/settings', express.json({ limit: '16kb' }), async (request, response) => {
+  try {
+    const current = await readSettings();
+    const body = request.body ?? {};
+    const updated = { ...current };
+    for (const key of Object.keys(DEFAULT_SETTINGS)) {
+      if (body[key] !== undefined) updated[key] = clampSetting(key, body[key]);
+    }
+    await fs.writeFile(settingsPath, `${JSON.stringify(updated, null, 2)}\n`, 'utf8');
+    response.json(updated);
+  } catch {
+    response.status(500).json({ message: '无法保存偏好设置。' });
+  }
+});
+
 function isTrustedWebSocketOrigin(origin, request) {
   if (!origin) return false;
   try {
@@ -297,7 +365,13 @@ app.post('/api/shutdown', (_req, res) => {
 });
 const MAX_MESSAGE_SIZE = 1024 * 1024;
 
+function logServerError(source, error) {
+  const detail = error instanceof Error ? `${error.message}\n${error.stack || ''}` : String(error);
+  console.error(`[${new Date().toISOString()}] [${source}] ${detail}`);
+}
+
 function send(ws, message) {
+  if (message?.type === 'error') logServerError('ws', `向客户端发送错误：${message.message}`);
   if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(message));
 }
 
@@ -419,6 +493,7 @@ wss.on('connection', (ws) => {
         });
       });
       ssh.on('error', (error) => {
+        logServerError('ssh', `SSH 连接失败：${error.message}`);
         send(ws, { type: 'error', message: `SSH 连接失败：${error.message}` });
         closeSsh();
       });
@@ -602,7 +677,17 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', closeSsh);
-  ws.on('error', closeSsh);
+  ws.on('error', (error) => {
+    logServerError('ws', `WebSocket 错误：${error.message}`);
+    closeSsh();
+  });
+});
+
+process.on('uncaughtException', (error) => {
+  logServerError('uncaughtException', error);
+});
+process.on('unhandledRejection', (reason) => {
+  logServerError('unhandledRejection', reason);
 });
 
 const port = process.env.PORT === undefined ? 1314 : Number(process.env.PORT);
