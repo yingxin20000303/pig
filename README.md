@@ -6,7 +6,7 @@
 
 多会话终端 · 连接配置管理 · SFTP 文件传输 · 连接状态监控
 
-[![Version](https://img.shields.io/badge/version-0.1.3-blue?style=flat-square)](https://github.com/yingxin20000303/pig/releases/tag/v0.1.3)
+[![Version](https://img.shields.io/badge/version-0.1.4-blue?style=flat-square)](https://github.com/yingxin20000303/pig/releases/tag/v0.1.4)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Docker%20%7C%20fnOS-orange?style=flat-square)](#-安装与启动)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](https://github.com/yingxin20000303/pig/pulls)
@@ -120,21 +120,22 @@ npm run dev
 
 建立连接后会自动打开终端标签页。可同时保持多个会话，点击标签切换；点击标签上的 `×` 会关闭并断开该 SSH 会话。
 
-### ⬆️ 上传目录
+### ⬆️ 上传文件
 
 1. 点击顶部 **「上传」** 按钮
-2. 输入远程目标目录（例如 `/var/www/app`），点击 **「选择目录」** 验证目录可用性
-3. 验证通过后按钮变为绿色 **「选择文件」**，点击后选择本地目录；目录内文件会保留层级上传
-4. 等待进度完成，期间仍可继续使用终端
+2. 在弹窗中输入远程目标目录（例如 `/var/www/app`），点击 **「读取目录」**；目录列表仅显示可进入的子目录
+3. 可双击子目录进入、点击上一级图标返回父目录，或直接修改路径后重新读取
+4. 点击底部 **「上传文件」**，一次选择一个或多个本地文件；全部文件会上传到当前远程目录
+5. 等待进度完成，期间仍可继续使用终端
 
 ![上传文件对话框](docs/screenshots/06-upload-picker.png)
 
 ### ⬇️ 下载远程文件
 
 1. 点击顶部 **「下载」** 按钮
-2. 输入远程目录并点击 **「读取目录」**
-3. 选择需要下载的一个或多个文件
-4. 文件将保存到浏览器默认下载目录
+2. 输入远程目录并点击 **「读取目录」**；也可双击目录进入或使用上一级图标返回父目录
+3. 勾选需要下载的一个或多个文件，点击底部 **「下载所选文件」**
+4. 浏览器支持目录选择时，仅需选择一次本地目标文件夹，所有选中文件均会保存到该位置；不支持时将保存到浏览器默认下载目录
 
 ![下载文件对话框](docs/screenshots/07-download-picker.png)
 

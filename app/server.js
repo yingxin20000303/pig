@@ -558,20 +558,6 @@ wss.on('connection', (ws) => {
       return;
     }
 
-    if (message.type === 'validate-upload-directory') {
-      if (!sftp) return send(ws, { type: 'upload-directory-invalid', requestId: String(message.requestId || ''), message: 'SFTP 尚未就绪。' });
-      const requestId = String(message.requestId || '');
-      const directory = resolveUserDirectory(message.directory);
-      if (!directory) return send(ws, { type: 'upload-directory-invalid', requestId, message: '请输入上传目标目录。' });
-      sftp.stat(directory, (error, stats) => {
-        if (error?.code === 2) return send(ws, { type: 'upload-directory-invalid', requestId, message: `上传目录不存在：${directory}` });
-        if (error) return send(ws, { type: 'upload-directory-invalid', requestId, message: `无法检查上传目录：${error.message}` });
-        if ((stats.mode & 0o170000) !== 0o040000) return send(ws, { type: 'upload-directory-invalid', requestId, message: `上传目标不是目录：${directory}` });
-        send(ws, { type: 'upload-directory-valid', requestId, directory });
-      });
-      return;
-    }
-
     if (message.type === 'upload-start') {
       if (!sftp) return send(ws, { type: 'transfer-error', message: 'SFTP 尚未就绪。' });
       const id = String(message.id || '');
@@ -583,16 +569,17 @@ wss.on('connection', (ws) => {
       const conflictAction = String(message.conflictAction || '');
       const beginUpload = (remotePath) => {
         const stream = sftp.createWriteStream(remotePath, { flags: 'w', mode: 0o644 });
-        const upload = { stream, received: 0, size, cancelled: false };
+        const upload = { stream, received: 0, size, cancelled: false, failed: false };
         uploads.set(id, upload);
         send(ws, { type: 'upload-ready', id, name: path.posix.basename(remotePath), remotePath });
         stream.on('error', (error) => {
+          upload.failed = true;
           uploads.delete(id);
           if (!upload.cancelled) send(ws, { type: 'transfer-error', id, message: `上传失败：${error.message}` });
         });
         stream.on('close', () => {
           uploads.delete(id);
-          if (!upload.cancelled) send(ws, { type: 'upload-complete', id, remotePath, size: upload.received });
+          if (!upload.cancelled && !upload.failed) send(ws, { type: 'upload-complete', id, remotePath, size: upload.received });
         });
       };
       const findRenamedPath = (index = 1) => {
@@ -626,30 +613,51 @@ wss.on('connection', (ws) => {
       if (!upload) return send(ws, { type: 'transfer-error', message: '上传会话不存在。' });
       try {
         const chunk = Buffer.from(String(message.data || ''), 'base64');
+        if (upload.received + chunk.length > upload.size) throw new Error('上传数据超过声明的文件大小。');
         upload.received += chunk.length;
         upload.stream.write(chunk);
         send(ws, { type: 'upload-progress', id: message.id, transferred: upload.received, size: upload.size });
-      } catch { send(ws, { type: 'transfer-error', id: message.id, message: '上传数据无效。' }); }
+      } catch (error) {
+        upload.failed = true;
+        uploads.delete(String(message.id || ''));
+        upload.stream.destroy();
+        send(ws, { type: 'transfer-error', id: message.id, message: error.message || '上传数据无效。' });
+      }
       return;
     }
     if (message.type === 'upload-end') {
-      const upload = uploads.get(String(message.id || ''));
-      if (upload) upload.stream.end();
+      const id = String(message.id || '');
+      const upload = uploads.get(id);
+      if (!upload) return;
+      if (upload.received !== upload.size) {
+        upload.failed = true;
+        uploads.delete(id);
+        upload.stream.destroy();
+        send(ws, { type: 'transfer-error', id, message: `上传数据不完整：已接收 ${upload.received} / ${upload.size} 字节。` });
+        return;
+      }
+      upload.stream.end();
       return;
     }
     if (message.type === 'list-files') {
-      if (!sftp) return send(ws, { type: 'transfer-error', operation: 'list-files', picker: message.picker, message: 'SFTP 尚未就绪。' });
+      if (!sftp) return send(ws, { type: 'transfer-error', operation: 'list-files', picker: message.picker, requestId: String(message.requestId || ''), message: 'SFTP 尚未就绪。' });
+      const requestId = String(message.requestId || '');
       const requestedDirectory = String(message.directory || '').trim();
       const listDirectory = (currentPath, displayPath = currentPath) => {
         sftp.readdir(currentPath, (readError, entries) => {
-          if (readError) return send(ws, { type: 'transfer-error', operation: 'list-files', picker: message.picker, message: `无法读取目录“${displayPath}”：${readError.message}` });
+          if (readError) return send(ws, { type: 'transfer-error', operation: 'list-files', picker: message.picker, requestId, message: `无法读取目录“${displayPath}”：${readError.message}` });
           const normalizedPath = currentPath === '/' ? '/' : currentPath.replace(/\/+$/, '');
-          const files = entries.filter((entry) => !entry.attrs.isDirectory()).map((entry) => ({ name: entry.filename, path: path.posix.join(normalizedPath, entry.filename), size: entry.attrs.size }));
-          send(ws, { type: 'file-list', picker: message.picker, path: displayPath, files });
+          const directories = entries
+            .filter((entry) => entry.attrs.isDirectory() && entry.filename !== '.' && entry.filename !== '..')
+            .map((entry) => ({ name: entry.filename, path: path.posix.join(normalizedPath, entry.filename) }));
+          const files = entries
+            .filter((entry) => !entry.attrs.isDirectory())
+            .map((entry) => ({ name: entry.filename, path: path.posix.join(normalizedPath, entry.filename), size: entry.attrs.size }));
+          send(ws, { type: 'file-list', picker: message.picker, requestId, path: displayPath, directories, files });
         });
       };
       const directory = resolveUserDirectory(requestedDirectory);
-      if (!directory) return send(ws, { type: 'transfer-error', operation: 'list-files', picker: message.picker, message: '请输入要读取的远程目录。' });
+      if (!directory) return send(ws, { type: 'transfer-error', operation: 'list-files', picker: message.picker, requestId, message: '请输入要读取的远程目录。' });
       listDirectory(directory, directory);
       return;
     }
@@ -660,6 +668,7 @@ wss.on('connection', (ws) => {
       if (!remotePath) return send(ws, { type: 'transfer-error', id, direction: 'download', message: '请提供远程文件路径。' });
       sftp.stat(remotePath, (statError, stats) => {
         if (statError) return send(ws, { type: 'transfer-error', id, direction: 'download', message: `无法读取远程文件：${statError.message}` });
+        if ((stats.mode & 0o170000) !== 0o100000) return send(ws, { type: 'transfer-error', id, direction: 'download', message: '下载目标不是普通文件。' });
         const stream = sftp.createReadStream(remotePath);
         const download = { stream, cancelled: false };
         downloads.set(id, download);

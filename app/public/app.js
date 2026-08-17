@@ -83,11 +83,17 @@ const filePickerBackdrop = document.querySelector('#file-picker-backdrop');
 const filePickerDirectoryForm = document.querySelector('#file-picker-directory-form');
 const filePickerDirectoryInput = document.querySelector('#file-picker-directory-input');
 const filePickerList = document.querySelector('#file-picker-list');
+const filePickerSelectionCount = document.querySelector('#file-picker-selection-count');
+const downloadSelectedButton = document.querySelector('#download-selected-button');
+const filePickerParentButton = document.querySelector('#file-picker-parent-button');
 const closeFilePickerButton = document.querySelector('#close-file-picker-button');
 const uploadPicker = document.querySelector('#upload-picker');
 const uploadPickerBackdrop = document.querySelector('#upload-picker-backdrop');
 const uploadDirectoryForm = document.querySelector('#upload-directory-form');
 const uploadDirectoryInput = document.querySelector('#upload-directory-input');
+const uploadPickerParentButton = document.querySelector('#upload-picker-parent-button');
+const uploadPickerList = document.querySelector('#upload-picker-list');
+const uploadSelectedButton = document.querySelector('#upload-selected-button');
 const uploadDirectoryError = document.querySelector('#upload-directory-error');
 const closeUploadPickerButton = document.querySelector('#close-upload-picker-button');
 const uploadConflictDialog = document.querySelector('#upload-conflict-dialog');
@@ -147,25 +153,47 @@ let profiles = [];
 let activeSessionId;
 let drawerTrigger;
 let editingSessionId = null;
-let uploadDirectoryValidation;
+const selectedDownloadFiles = new Map();
 const sessions = new Map();
 function socketIsOpen(socket) { return socket?.readyState === WebSocket.OPEN; }
 function socketIsConnecting(socket) { return socket?.readyState === WebSocket.CONNECTING; }
 setInterval(() => refreshConnectionHealth(), 1000);
 
 const transfers = new Map();
+const pickerRequests = new Map();
 function updateEmptyState() { emptyState.hidden = sessions.size > 0; }
-function refreshDownloadPickerList(session, directory) {
-  if (!session?.connected || !socketIsOpen(session.socket)) return;
-  if (!directory) return;
-  filePickerDirectoryInput.placeholder = '正在读取目录…';
-  clearChildren(filePickerList);
+function parentDirectory(directory) {
+  const normalized = String(directory || '').replace(/\/+$/, '') || '/';
+  return normalized === '/' ? '/' : (normalized.slice(0, normalized.lastIndexOf('/')) || '/');
+}
+function showPickerLoading(input, list) {
+  input.placeholder = '正在读取目录…';
+  clearChildren(list);
   const loading = document.createElement('div');
   loading.className = 'file-picker-empty';
   loading.textContent = '正在读取目录…';
-  filePickerList.append(loading);
-  session.socket.send(JSON.stringify({ type: 'list-files', directory }));
+  list.append(loading);
 }
+function updateDownloadSelection() {
+  const count = selectedDownloadFiles.size;
+  filePickerSelectionCount.textContent = count ? `已选择 ${count} 个文件` : '未选择文件';
+  downloadSelectedButton.disabled = count === 0;
+}
+function refreshPickerList(session, picker, directory) {
+  if (!session?.connected || !socketIsOpen(session.socket) || !directory) return;
+  if (picker === 'download') {
+    selectedDownloadFiles.clear();
+    updateDownloadSelection();
+  }
+  const input = picker === 'upload' ? uploadDirectoryInput : filePickerDirectoryInput;
+  const list = picker === 'upload' ? uploadPickerList : filePickerList;
+  const requestId = generateUUID();
+  pickerRequests.set(picker, { requestId, sessionId: session.id, directory });
+  showPickerLoading(input, list);
+  session.socket.send(JSON.stringify({ type: 'list-files', picker, directory, requestId }));
+}
+function refreshDownloadPickerList(session, directory) { refreshPickerList(session, 'download', directory); }
+function refreshUploadPickerList(session, directory) { refreshPickerList(session, 'upload', directory); }
 function openFilePicker() {
   filePicker.hidden = false;
   filePickerBackdrop.hidden = false;
@@ -175,52 +203,29 @@ function openFilePicker() {
     refreshDownloadPickerList(session, session.home);
   }
 }
-function closeFilePicker() { filePicker.hidden = true; filePickerBackdrop.hidden = true; }
+function closeFilePicker() {
+  pickerRequests.delete('download');
+  filePicker.hidden = true;
+  filePickerBackdrop.hidden = true;
+  selectedDownloadFiles.clear();
+  updateDownloadSelection();
+}
 function setUploadDirectoryError(message = '') {
   uploadDirectoryError.textContent = message;
   uploadDirectoryError.hidden = !message;
   uploadDirectoryError.classList.toggle('visible', Boolean(message));
   uploadDirectoryInput.setAttribute('aria-invalid', String(Boolean(message)));
 }
-function setUploadDirectoryChecking(checking) {
-  uploadDirectoryForm.classList.toggle('is-checking', checking);
-  uploadDirectoryForm.querySelector('button').disabled = checking;
-}
-function setUploadDirectoryReady(ready) {
-  const btn = uploadDirectoryForm.querySelector('button');
-  if (ready) {
-    btn.type = 'button';
-    btn.textContent = '选择文件';
-    btn.dataset.ready = '1';
-    btn.classList.add('upload-pick-ready');
-  } else {
-    btn.type = 'submit';
-    btn.textContent = '选择目录';
-    delete btn.dataset.ready;
-    btn.classList.remove('upload-pick-ready');
-  }
-}
-function validateUploadDirectory() {
-  const session = activeSession();
-  const directory = uploadDirectoryInput.value.trim();
-  if (!directory) return uploadDirectoryInput.focus();
-  if (!session?.connected || !socketIsOpen(session.socket)) return;
-  const requestId = generateUUID();
-  uploadDirectoryValidation = { requestId, sessionId: session.id, directory };
-  setUploadDirectoryReady(false);
-  setUploadDirectoryError();
-  setUploadDirectoryChecking(true);
-  session.socket.send(JSON.stringify({ type: 'validate-upload-directory', requestId, directory }));
-}
 function openUploadPicker(fillHome = true) {
   uploadPicker.hidden = false;
   uploadPickerBackdrop.hidden = false;
   const session = activeSession();
   if (fillHome && session?.home) uploadDirectoryInput.value = session.home;
-  setUploadDirectoryReady(false);
+  setUploadDirectoryError();
+  if (session?.home && uploadDirectoryInput.value.trim()) refreshUploadPickerList(session, uploadDirectoryInput.value.trim());
   uploadDirectoryInput.focus();
 }
-function closeUploadPicker() { uploadPicker.hidden = true; uploadPickerBackdrop.hidden = true; uploadDirectoryValidation = undefined; setUploadDirectoryChecking(false); setUploadDirectoryReady(false); setUploadDirectoryError(); }
+function closeUploadPicker() { pickerRequests.delete('upload'); uploadPicker.hidden = true; uploadPickerBackdrop.hidden = true; setUploadDirectoryError(); clearChildren(uploadPickerList); }
 let uploadConflictCloseTimer = null;
 function openUploadConflict(session, message) {
   if (uploadConflictCloseTimer) { clearTimeout(uploadConflictCloseTimer); uploadConflictCloseTimer = null; }
@@ -266,38 +271,66 @@ function resolveUploadConflict(action) {
     session.socket.send(JSON.stringify({ type: 'upload-start', id, name: upload.file.name, size: upload.file.size, directory: upload.directory, conflictAction: action }));
   }
 }
-function showDirectoryInput(message) {
-  filePickerDirectoryInput.placeholder = message;
-  clearChildren(filePickerList);
-  filePickerDirectoryInput.focus();
+function showDirectoryInput(message, picker = 'download') {
+  const input = picker === 'upload' ? uploadDirectoryInput : filePickerDirectoryInput;
+  const list = picker === 'upload' ? uploadPickerList : filePickerList;
+  input.placeholder = message;
+  clearChildren(list);
+  input.focus();
+}
+function createDirectoryItem(session, directory, picker) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'file-picker-item directory-picker-item';
+  button.innerHTML = '<span></span><span>目录</span>';
+  button.querySelector('span').textContent = directory.name;
+  button.addEventListener('dblclick', () => {
+    const input = picker === 'upload' ? uploadDirectoryInput : filePickerDirectoryInput;
+    input.value = directory.path;
+    if (picker === 'upload') setUploadDirectoryError();
+    refreshPickerList(session, picker, directory.path);
+  });
+  return button;
 }
 function renderFileList(session, message) {
-  filePickerDirectoryInput.value = message.path;
-  filePickerDirectoryInput.placeholder = '输入远程目录，例如 /home/user';
-  clearChildren(filePickerList);
-  if (!message.files.length) { filePickerList.innerHTML = '<div class="file-picker-empty">当前目录没有可下载的文件</div>'; return; }
-  message.files.forEach((file) => {
-    const button = document.createElement('button');
-    button.type = 'button'; button.className = 'file-picker-item';
-    button.innerHTML = `<span></span><span>${formatBytes(file.size)}</span>`;
-    button.querySelector('span').textContent = file.name;
-    button.addEventListener('click', async () => {
-      if (!session.connected || !socketIsOpen(session.socket)) return;
-      const id = generateUUID();
-      let saveHandle;
-      if ('showSaveFilePicker' in window) {
-        try {
-          saveHandle = await window.showSaveFilePicker({ suggestedName: file.name });
-        } catch (error) {
-          if (error.name === 'AbortError') return;
-        }
-      }
-      session.downloads.set(id, { name: file.name, chunks: [], saveHandle });
-      session.socket.send(JSON.stringify({ type: 'download', id, remotePath: file.path }));
-      closeFilePicker();
+  const picker = message.picker === 'upload' ? 'upload' : 'download';
+  const request = pickerRequests.get(picker);
+  const pickerOpen = picker === 'upload' ? !uploadPicker.hidden : !filePicker.hidden;
+  if (!pickerOpen || !request || request.requestId !== message.requestId || request.sessionId !== session.id) return;
+  const input = picker === 'upload' ? uploadDirectoryInput : filePickerDirectoryInput;
+  const list = picker === 'upload' ? uploadPickerList : filePickerList;
+  const directories = Array.isArray(message.directories) ? message.directories : [];
+  const files = Array.isArray(message.files) ? message.files : [];
+  input.value = message.path;
+  input.placeholder = picker === 'upload' ? '例如 /home/user' : '输入远程目录，例如 /home/user';
+  clearChildren(list);
+  directories.forEach((directory) => list.append(createDirectoryItem(session, directory, picker)));
+  if (picker === 'upload') {
+    if (!directories.length) list.innerHTML = '<div class="file-picker-empty">当前目录没有可进入的子目录</div>';
+    return;
+  }
+  if (!directories.length && !files.length) { list.innerHTML = '<div class="file-picker-empty">当前目录没有可下载的文件或可进入的目录</div>'; return; }
+  files.forEach((file) => {
+    const label = document.createElement('label');
+    label.className = 'file-picker-item file-picker-file-item';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = selectedDownloadFiles.has(file.path);
+    const name = document.createElement('span');
+    name.textContent = file.name;
+    const size = document.createElement('span');
+    size.textContent = formatBytes(file.size);
+    checkbox.addEventListener('change', () => {
+      if (checkbox.checked) selectedDownloadFiles.set(file.path, file);
+      else selectedDownloadFiles.delete(file.path);
+      label.classList.toggle('selected', checkbox.checked);
+      updateDownloadSelection();
     });
-    filePickerList.append(button);
+    label.classList.toggle('selected', checkbox.checked);
+    label.append(checkbox, name, size);
+    list.append(label);
   });
+  updateDownloadSelection();
 }
 function formatBytes(bytes) {
   if (!bytes) return '0 B';
@@ -537,6 +570,10 @@ function fitSession(session) {
 }
 function activateSession(id) {
   if (!sessions.has(id)) return;
+  if (id !== activeSessionId) {
+    if (!filePicker.hidden) closeFilePicker();
+    if (!uploadPicker.hidden) closeUploadPicker();
+  }
   activeSessionId = id;
   sessions.forEach((session) => {
     const active = session.id === id;
@@ -990,15 +1027,6 @@ function establishConnection(session, values) {
         }
       }
     }
-    if (message.type === 'upload-directory-valid' || message.type === 'upload-directory-invalid') {
-      const validation = uploadDirectoryValidation;
-      if (!validation || validation.requestId !== message.requestId || validation.sessionId !== session.id) return;
-      uploadDirectoryValidation = undefined;
-      setUploadDirectoryChecking(false);
-      if (message.type === 'upload-directory-invalid') return setUploadDirectoryError(message.message);
-      uploadDirectoryInput.value = message.directory;
-      setUploadDirectoryReady(true);
-    }
     if (message.type === 'upload-ready') {
       if (message.name) updateTransfer(message.id, { name: message.name });
       void startUpload(session, message.id);
@@ -1008,15 +1036,13 @@ function establishConnection(session, values) {
     if (message.type === 'upload-complete') updateTransfer(message.id, { done: true, transferred: message.size });
     if (message.type === 'transfer-error') {
       const upload = session.uploads.get(message.id);
-      if (message.operation === 'list-files') showDirectoryInput(`${message.message}，请输入要读取的远程目录。`);
-      else if (upload) {
+      if (message.operation === 'list-files') {
+        const picker = message.picker === 'upload' ? 'upload' : 'download';
+        const request = pickerRequests.get(picker);
+        if (request && request.requestId === message.requestId && request.sessionId === session.id) showDirectoryInput(`${message.message}，请输入要读取的远程目录。`, picker);
+      } else if (upload) {
         session.uploads.delete(message.id);
-        const element = transferPanel.querySelector(`[data-transfer-id="${message.id}"]`);
-        removeTransfer(message.id, element);
-        setUploadDirectoryError(message.message);
-        uploadDirectoryInput.value = upload.directory;
-        openUploadPicker(false);
-        uploadDirectoryInput.focus();
+        updateTransfer(message.id, { direction: 'upload', error: message.message });
       } else updateTransfer(message.id || generateUUID(), { direction: message.direction || 'upload', name: transfers.get(message.id)?.name || '文件传输', error: message.message });
     }
     if (message.type === 'error') session.terminal.writeln(`\r\n\x1b[31m${message.message}\x1b[0m`);
@@ -1247,6 +1273,9 @@ document.addEventListener('keydown', (event) => {
   if (event.key !== 'Escape') return;
   if (!shutdownConfirmDialog.hidden) return closeShutdownConfirm(false);
   if (!profileOverwriteDialog.hidden) return closeProfileOverwrite(false);
+  if (!uploadConflictDialog.hidden) return resolveUploadConflict('cancel');
+  if (!uploadPicker.hidden) return closeUploadPicker();
+  if (!filePicker.hidden) return closeFilePicker();
   if (drawer.classList.contains('open')) closeDrawer();
 });
 uploadButton.addEventListener('click', () => {
@@ -1256,29 +1285,37 @@ uploadButton.addEventListener('click', () => {
 });
 uploadDirectoryForm.addEventListener('submit', (event) => {
   event.preventDefault();
-  validateUploadDirectory();
+  const session = activeSession();
+  const directory = uploadDirectoryInput.value.trim();
+  if (!session?.connected || !socketIsOpen(session.socket)) return;
+  if (!directory) return showDirectoryInput('请输入要读取的远程目录。', 'upload');
+  setUploadDirectoryError();
+  refreshUploadPickerList(session, directory);
 });
-const uploadDirectoryButton = uploadDirectoryForm.querySelector('button');
-uploadDirectoryButton.addEventListener('click', () => {
-  if (uploadDirectoryButton.dataset.ready === '1') uploadInput.click();
+uploadSelectedButton.addEventListener('click', () => {
+  uploadInput.click();
 });
 uploadDirectoryInput.addEventListener('input', () => {
-  uploadDirectoryValidation = undefined;
-  setUploadDirectoryChecking(false);
-  setUploadDirectoryReady(false);
   setUploadDirectoryError();
 });
+uploadDirectoryInput.addEventListener('change', () => {
+  const session = activeSession();
+  const directory = uploadDirectoryInput.value.trim();
+  if (session?.connected && directory) refreshUploadPickerList(session, directory);
+});
 uploadInput.addEventListener('change', () => {
-  const file = uploadInput.files[0];
+  const files = [...uploadInput.files];
   const session = activeSession();
   const directory = uploadDirectoryInput.value.trim();
   uploadInput.value = '';
-  if (!file || !session?.connected || !directory) return;
+  if (!files.length || !session?.connected || !directory) return;
   closeUploadPicker();
-  const id = generateUUID();
-  updateTransfer(id, { direction: 'upload', name: file.name, size: file.size, transferred: 0 });
-  session.uploads.set(id, { file, directory });
-  session.socket.send(JSON.stringify({ type: 'upload-start', id, name: file.name, size: file.size, directory }));
+  for (const file of files) {
+    const id = generateUUID();
+    updateTransfer(id, { direction: 'upload', name: file.name, size: file.size, transferred: 0 });
+    session.uploads.set(id, { file, directory });
+    session.socket.send(JSON.stringify({ type: 'upload-start', id, name: file.name, size: file.size, directory }));
+  }
 });
 downloadButton.addEventListener('click', () => { const session = activeSession(); if (!session?.connected) return session?.terminal.writeln('\r\n\x1b[31m请先连接 SSH 会话。\x1b[0m'); filePickerDirectoryInput.placeholder = '请输入远程目录，例如 /home/user'; clearChildren(filePickerList); openFilePicker(); filePickerDirectoryInput.focus(); });
 filePickerDirectoryForm.addEventListener('submit', (event) => {
@@ -1287,9 +1324,49 @@ filePickerDirectoryForm.addEventListener('submit', (event) => {
   const directory = filePickerDirectoryInput.value.trim();
   if (!session?.connected || !socketIsOpen(session.socket)) return;
   if (!directory) return showDirectoryInput('请输入要读取的远程目录。');
-  filePickerDirectoryInput.placeholder = '正在读取指定目录…';
-  clearChildren(filePickerList);
-  session.socket.send(JSON.stringify({ type: 'list-files', directory }));
+  refreshDownloadPickerList(session, directory);
+});
+filePickerParentButton.addEventListener('click', () => {
+  const session = activeSession();
+  const directory = filePickerDirectoryInput.value.trim();
+  if (session?.connected && directory) refreshDownloadPickerList(session, parentDirectory(directory));
+});
+uploadPickerParentButton.addEventListener('click', () => {
+  const session = activeSession();
+  const directory = uploadDirectoryInput.value.trim();
+  if (!session?.connected || !directory) return;
+  setUploadDirectoryError();
+  refreshUploadPickerList(session, parentDirectory(directory));
+});
+downloadSelectedButton.addEventListener('click', async () => {
+  const session = activeSession();
+  const files = [...selectedDownloadFiles.values()];
+  if (!session?.connected || !socketIsOpen(session.socket) || !files.length) return;
+
+  let directoryHandle;
+  if ('showDirectoryPicker' in window) {
+    try {
+      directoryHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    } catch (error) {
+      if (error.name === 'AbortError') return;
+    }
+  }
+
+  for (const file of files) {
+    const id = generateUUID();
+    let saveHandle;
+    if (directoryHandle) {
+      try {
+        saveHandle = await directoryHandle.getFileHandle(file.name, { create: true });
+      } catch (error) {
+        updateTransfer(id, { direction: 'download', name: file.name, error: `无法保存到所选目录：${error.message}` });
+        continue;
+      }
+    }
+    session.downloads.set(id, { name: file.name, chunks: [], saveHandle });
+    session.socket.send(JSON.stringify({ type: 'download', id, remotePath: file.path }));
+  }
+  closeFilePicker();
 });
 closeFilePickerButton.addEventListener('click', closeFilePicker);
 filePickerBackdrop.addEventListener('click', closeFilePicker);
