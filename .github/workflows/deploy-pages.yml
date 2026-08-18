@@ -6,6 +6,8 @@ on:
     paths:
       - site/**
       - docs/screenshots/**
+      - README.md
+      - CHANGELOG.md
       - .github/workflows/deploy-pages.yml
   workflow_dispatch:
 

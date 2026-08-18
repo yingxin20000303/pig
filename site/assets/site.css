@@ -128,7 +128,7 @@ h3 { margin: 0; font-size: 1.2rem; }
 .section-heading { max-width: 650px; margin-bottom: 42px; }
 .section-heading h2 { margin-bottom: 13px; }
 .section-heading > p:not(.eyebrow) { margin: 0; color: var(--muted); }
-.feature-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .feature-card { position: relative; min-height: 240px; padding: 28px 30px; border: 1px solid var(--line); border-radius: 16px; background: var(--white); box-shadow: 0 8px 24px rgba(103, 154, 130, .06); transition: transform .18s ease, box-shadow .18s ease; }
 
 .scenarios { padding: 98px 0; background: var(--section-pale); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }

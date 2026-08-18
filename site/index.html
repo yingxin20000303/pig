@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="WebSSH：本地优先的多会话 Web SSH 终端、连接管理与 SFTP 文件传输工具。">
+  <meta name="description" content="WebSSH：本地优先的多会话 Web SSH 工作台，提供连接管理、SFTP 批量传输与可检索的传输历史。">
   <title>WebSSH · 本地优先的 SSH 工作台</title>
   <link rel="icon" type="image/png" href="assets/icon.png">
   <link rel="apple-touch-icon" href="assets/icon.png">
@@ -34,15 +34,16 @@
       <div class="hero-copy">
         <p class="eyebrow">LOCAL-FIRST SSH WORKSPACE</p>
         <h1>你的 SSH，<br><em>更从容地管理。</em></h1>
-        <p class="lead">在自己的设备或受控服务器中运行 WebSSH，通过浏览器集中管理终端会话、常用连接与 SFTP 文件传输。</p>
+        <p class="lead">在自己的设备或受控服务器中运行 WebSSH，通过浏览器集中管理终端会话、常用连接、SFTP 文件传输与可检索的传输历史。</p>
         <div class="actions">
           <a class="button primary" href="https://github.com/yingxin20000303/pig/releases/download/v0.1.6/WebSSH-0.1.6-Windows.zip">下载 v0.1.6 <span>→</span></a>
-          <a class="button secondary" href="https://github.com/yingxin20000303/pig#readme">阅读使用手册</a>
+          <a class="button secondary" href="https://github.com/yingxin20000303/pig#readme">在 GitHub 查看使用手册</a>
         </div>
         <ul class="hero-points">
           <li>本地优先</li>
           <li>多会话终端</li>
           <li>批量 SFTP 传输</li>
+          <li>可检索传输历史</li>
           <li>支持 Windows / Docker / fnOS</li>
         </ul>
       </div>
@@ -91,26 +92,32 @@
         </article>
         <article class="feature-card">
           <div class="feature-index">03</div>
-          <h3>SFTP 文件传输</h3>
+          <h3>SFTP 批量传输</h3>
           <p>支持手动输入路径或浏览远程目录，双击进入子目录或返回上级目录；可批量上传，并将选中的远程文件直接保存至本地指定目录。</p>
           <span class="feature-symbol">↗</span>
         </article>
         <article class="feature-card">
           <div class="feature-index">04</div>
+          <h3>可检索传输历史</h3>
+          <p>集中查看上传和下载记录，按文件名搜索，并快速确认文件位置、服务器、传输状态与详细信息。</p>
+          <span class="feature-symbol">⌕</span>
+        </article>
+        <article class="feature-card">
+          <div class="feature-index">05</div>
           <h3>可调整的工作环境</h3>
           <p>深色与浅色主题、字号、字体颜色和背景图片均可按自己的习惯调整。</p>
           <span class="feature-symbol">◐</span>
         </article>
         <article class="feature-card">
-          <div class="feature-index">05</div>
+          <div class="feature-index">06</div>
           <h3>实时连接状态</h3>
           <p>连接后可查看主机名、SSH 延迟、CPU、内存和已连接时长，帮助你快速确认服务器状态。</p>
           <span class="feature-symbol">⌁</span>
         </article>
         <article class="feature-card">
-          <div class="feature-index">06</div>
+          <div class="feature-index">07</div>
           <h3>跨浏览器使用</h3>
-          <p>面向现代桌面与移动浏览器设计，常用设置会保存到服务端，不会因清理浏览器缓存而丢失。</p>
+          <p>面向现代桌面与移动浏览器设计，常用设置会保存到服务端。选择本地目录直接下载需使用支持文件系统访问 API 的新版 Chrome 或 Edge。</p>
           <span class="feature-symbol">○</span>
         </article>
       </div>
@@ -141,7 +148,7 @@
         <ol class="steps">
           <li><span>1</span><div><strong>启动 WebSSH</strong><p>Windows 便携版解压后双击运行；Docker 和 fnOS 按部署说明启动。随后在浏览器打开应用地址。</p></div></li>
           <li><span>2</span><div><strong>新建并保存连接</strong><p>填写主机、端口和用户名，选择密码或 OpenSSH 私钥认证。确认可用后，可将常用服务器保存并置顶。</p></div></li>
-          <li><span>3</span><div><strong>连接并开始工作</strong><p>打开终端标签执行命令；需要传输文件时，可浏览远程目录、批量上传，或选择本地目录直接保存下载文件。</p></div></li>
+          <li><span>3</span><div><strong>连接并开始工作</strong><p>打开终端标签执行命令；需要传输文件时，可浏览远程目录、批量上传，或选择本地目录直接保存下载文件，并在传输历史中检索记录。</p></div></li>
         </ol>
       </div>
     </section>
@@ -161,7 +168,7 @@
         <h2>选择适合你的运行方式</h2>
       </div>
       <div class="release-note"><div><span>当前版本</span><strong>WebSSH v0.1.6</strong><p>下载文件可直接保存至所选本地目录；传输历史支持更清晰的检索与详情展示，并完善下载写入的完整性和清理机制。</p></div><a href="https://github.com/yingxin20000303/pig/releases/tag/v0.1.6" target="_blank" rel="noopener">查看本版更新 <i>→</i></a></div>
-      <p class="download-note">Windows 便携版默认仅监听本机地址；如需局域网访问，请显式配置监听地址，并通过防火墙、访问控制或 VPN 保护服务。</p>
+      <p class="download-note">选择本地目录直接下载需要新版 Chrome 或 Edge；Windows 便携版默认仅监听本机地址。如需局域网访问，请显式配置监听地址，并通过防火墙、访问控制或 VPN 保护服务。</p>
       <div class="download-grid">
         <a class="download-card" href="https://github.com/yingxin20000303/pig/releases/download/v0.1.6/WebSSH-0.1.6-Windows.zip">
           <span class="platform">WINDOWS</span>
@@ -175,11 +182,11 @@
           <p>在飞牛 NAS 应用中心手动导入 FPK，无需 Docker。</p>
           <b>下载 FPK <i>→</i></b>
         </a>
-        <a class="download-card" href="https://github.com/yingxin20000303/pig/tree/main/app">
+        <a class="download-card" href="https://github.com/yingxin20000303/pig/blob/main/app/README.md">
           <span class="platform">SELF-HOSTED</span>
           <h3>Docker / 源码</h3>
           <p>适合自托管部署、开发调试与进一步定制。</p>
-          <b>查看说明 <i>→</i></b>
+          <b>查看部署说明 <i>→</i></b>
         </a>
       </div>
     </section>

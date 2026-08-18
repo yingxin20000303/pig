@@ -34,21 +34,23 @@
 > - 密码 / 私钥认证，可选 SSH 主机指纹校验
 > - 基于浏览器的交互式终端，自动同步终端尺寸
 > - 本地保存与管理连接配置
-> - SFTP 上传、下载与远程目录浏览
+> - SFTP 批量上传、下载与远程目录浏览；可通过 Chrome / Edge 原生目录选择器直接保存至指定本地目录
+> - 可检索的传输历史，展示文件位置、服务器、大小、耗时与完成时间，并支持清理记录
 > - 同名文件冲突可选覆盖、自动重命名或取消
 > - 实时显示主机名、SSH 延迟、CPU、内存等健康信息
 > - 深色 / 浅色主题
 
 ### English Description
 
-> WebSSH is a locally running, browser-based SSH terminal for fnOS. It provides multi-session tabs, saved connection profiles, SFTP file transfer and real-time host monitoring — an easy way to manage Linux servers from your browser.
+> WebSSH is a locally running, browser-based SSH terminal for fnOS. It provides multi-session tabs, saved connection profiles, SFTP file transfer history and real-time host monitoring — an easy way to manage Linux servers from your browser.
 >
 > Features:
 > - Multiple SSH session tabs with auto-reconnect
 > - Password or private-key authentication with optional host key fingerprint verification
 > - Interactive browser terminal with automatic size sync
 > - Locally stored and managed connection profiles
-> - SFTP upload, download and remote file browsing
+> - Batch SFTP upload, download and remote file browsing; choose a local destination directly with the native directory picker in Chrome or Edge
+> - Searchable transfer history with file location, server, size, duration and completion time; records can be removed individually or cleared
 > - Conflict handling: overwrite, auto-rename or cancel
 > - Live hostname, latency, CPU and memory status
 > - Dark / light themes
@@ -57,8 +59,8 @@
 
 ```
 v0.1.6
-- 下载时可选择本地目标目录，文件直接保存到所选目录，不经过浏览器默认下载目录
-- 优化传输历史展示与检索，补充位置、服务器和传输信息
+- 下载时可选择本地目标目录，文件直接保存到所选目录，不经过浏览器默认下载目录（需使用新版 Chrome 或 Edge）
+- 优化传输历史展示与检索，补充位置、服务器和传输信息，并支持删除单条或清空记录
 - 修复下载完成状态大小，以及取消下载或关闭会话时的本地写入流清理
 v0.1.5
 - 服务端与前端重构为模块化架构，新增自动化测试套件与项目完整性检查
