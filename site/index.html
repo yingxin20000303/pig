@@ -22,6 +22,9 @@
         <a href="#workflow">使用方式</a>
         <a href="#downloads">下载</a>
       </nav>
+      <button class="theme-toggle" type="button" aria-label="切换深浅色模式" aria-pressed="false">
+        <span class="theme-toggle-icon" aria-hidden="true">☾</span><span class="theme-toggle-text">深色</span>
+      </button>
       <a class="github-link" href="https://github.com/yingxin20000303/pig" target="_blank" rel="noopener">GitHub ↗</a>
     </div>
   </header>
@@ -50,8 +53,11 @@
     </section>
 
     <section class="showcase container" aria-label="WebSSH 界面预览">
-      <div class="window-bar"><i></i><i></i><i></i><span>WebSSH · 本地 SSH 工作台</span></div>
-      <img src="docs/screenshots/01-home.png" alt="WebSSH 主界面预览">
+      <div class="window-bar"><i></i><i></i><i></i><span>WebSSH · 本地 SSH 工作台</span><b class="showcase-theme">浅色模式</b></div>
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/home-dark.png">
+        <img class="showcase-image" src="assets/screenshots/home-light.png" alt="WebSSH 浅色模式主界面预览">
+      </picture>
     </section>
 
     <section class="intro">
@@ -183,5 +189,34 @@
     <span>WebSSH Contributors · MIT License</span>
     <div><a href="https://github.com/yingxin20000303/pig/blob/main/CHANGELOG.md">更新日志</a><a href="https://github.com/yingxin20000303/pig/issues">反馈问题</a></div>
   </footer>
+
+  <script>
+    (() => {
+      const toggle = document.querySelector('.theme-toggle');
+      const image = document.querySelector('.showcase-image');
+      const label = document.querySelector('.showcase-theme');
+      const themes = {
+        light: { icon: '☾', text: '深色', screenshot: 'assets/screenshots/home-light.png', alt: 'WebSSH 浅色模式主界面预览', preview: '浅色模式' },
+        dark: { icon: '☀', text: '浅色', screenshot: 'assets/screenshots/home-dark.png', alt: 'WebSSH 深色模式主界面预览', preview: '深色模式' }
+      };
+      const applyTheme = (theme) => {
+        const next = themes[theme];
+        document.documentElement.dataset.theme = theme;
+        toggle.querySelector('.theme-toggle-icon').textContent = next.icon;
+        toggle.querySelector('.theme-toggle-text').textContent = next.text;
+        toggle.setAttribute('aria-pressed', String(theme === 'dark'));
+        image.src = next.screenshot;
+        image.alt = next.alt;
+        label.textContent = next.preview;
+      };
+      const storedTheme = localStorage.getItem('site-theme');
+      applyTheme(storedTheme || 'light');
+      toggle.addEventListener('click', () => {
+        const nextTheme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('site-theme', nextTheme);
+        applyTheme(nextTheme);
+      });
+    })();
+  </script>
 </body>
 </html>
