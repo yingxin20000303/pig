@@ -27,7 +27,9 @@ async function main() {
   const mock = await createMockSshServer({ hostname: 'demo-host' });
   console.log(`目标服务：${baseUrl}${app ? '（隔离实例）' : ''}，mock SSH 端口 ${mock.port}`);
 
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({
+    executablePath: process.env.WEBSSH_SCREENSHOT_BROWSER || undefined
+  });
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 2 });
 
   // 预写演示 profiles（截图 09 需要：页面加载时 GET 到列表才会显示“保存连接”区块）
@@ -43,6 +45,14 @@ async function main() {
       body: JSON.stringify(profile)
     });
   }
+  await fetch(`${baseUrl}/api/transfer-history`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json', origin: baseUrl },
+    body: JSON.stringify([
+      { id: 'demo-download', direction: 'download', name: 'backup-2026-08-18.tar.gz', size: 268435456, location: 'D:\\WebSSH 下载', server: '生产服务器 · 203.0.113.10:22', durationMs: 18200, completedAt: '2026-08-18T09:36:00.000Z' },
+      { id: 'demo-upload', direction: 'upload', name: 'deploy-config.json', size: 48216, location: '/opt/webssh/config', server: '开发机 · 192.168.1.20:22', durationMs: 3200, completedAt: '2026-08-18T09:24:00.000Z' }
+    ])
+  });
 
   page.on('console', (msg) => {
     if (msg.type() === 'error') console.log('[page error]', msg.text().slice(0, 200));
@@ -145,6 +155,15 @@ async function main() {
   await shot('07-download-picker.png');
   await page.click('#close-file-picker-button');
   await sleep(300);
+
+  // 08 传输历史
+  await page.click('#transfer-history-button');
+  await page.waitForSelector('#transfer-history-dialog:not([hidden])');
+  await sleep(400);
+  await shot('10-transfer-history.png');
+  await page.click('#close-transfer-history-button');
+  await sleep(300);
+
   // 断开会话（关闭标签的 .tab-close 按钮，无确认弹窗）
   await page.click('#session-tabs .session-tab .tab-close');
   await sleep(400);

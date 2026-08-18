@@ -24,7 +24,8 @@ export async function startApp() {
     WEBSSH_UPLOADS_PATH: path.join(dataDir, 'uploads'),
     WEBSSH_PROFILES_PATH: path.join(dataDir, 'ssh-connections.json'),
     WEBSSH_BACKGROUND_PATH: path.join(dataDir, 'background.json'),
-    WEBSSH_SETTINGS_PATH: path.join(dataDir, 'settings.json')
+    WEBSSH_SETTINGS_PATH: path.join(dataDir, 'settings.json'),
+    WEBSSH_TRANSFER_HISTORY_PATH: path.join(dataDir, 'transfer-history.json')
   };
   const child = spawn(process.execPath, ['server.js'], { cwd: appDir, env, stdio: ['ignore', 'pipe', 'pipe'] });
   const logs = [];
