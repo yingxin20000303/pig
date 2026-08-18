@@ -46,7 +46,7 @@ import {
   terminalContextHint
 } from './dom.js?v=26';
 import { establishConnection } from './connections.js?v=26';
-import { activeSession, createSession, updateSessionTabsOverflow, refreshActiveStatus } from './sessions.js?v=26';
+import { activeSession, createSession, updateSessionTabsOverflow } from './sessions.js?v=26';
 import { renderProfiles, persistProfile, fillProfile, clearProfileSelection, profileId } from './profiles.js?v=26';
 
 /** 抽屉触发按钮（用于关闭后焦点还原） */

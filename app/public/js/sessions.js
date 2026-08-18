@@ -29,13 +29,10 @@ import {
   uploadPicker
 } from './dom.js?v=26';
 import { buildTerminalTheme, updateSettings } from './settings.js?v=26';
-import { establishConnection, reconnectSession } from './connections.js?v=26';
+import { reconnectSession } from './connections.js?v=26';
 import { connectPending, isPinnedSession } from './profiles.js?v=26';
 import { prepareEditSession, showTerminalContextMenu } from './ui.js?v=26';
 import { closeFilePicker, closeUploadPicker } from './transfers.js?v=26';
-
-/** 激活的会话 DOM 容器（#terminal 区域，用于挂载终端 host） */
-export const terminalAreaEl = terminalArea;
 
 /**
  * 获取当前激活的会话对象。
