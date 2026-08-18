@@ -83,7 +83,7 @@ docker compose down -v
 ### 使用 docker run
 
 ```bash
-docker build -t webssh:0.1.5 .
+docker build -t webssh:0.1.6 .
 docker volume create webssh-data
 docker run -d \
   --name webssh \
@@ -97,7 +97,7 @@ docker run -d \
   -e WEBSSH_BACKGROUND_PATH=/data/background.json \
   -e WEBSSH_UPLOADS_PATH=/data/uploads \
   -v webssh-data:/data \
-  webssh:0.1.5
+  webssh:0.1.6
 ```
 
 ### 环境变量
@@ -126,7 +126,7 @@ Docker Buildx 可发布 `linux/amd64` 与 `linux/arm64` 镜像：
 ```bash
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
-  --tag <registry>/<namespace>/webssh:0.1.5 \
+  --tag <registry>/<namespace>/webssh:0.1.6 \
   --tag <registry>/<namespace>/webssh:latest \
   --push \
   .

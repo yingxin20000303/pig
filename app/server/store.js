@@ -12,6 +12,7 @@ import {
   profilesPath,
   profilesKeyPath,
   settingsPath,
+  transferHistoryPath,
   backgroundPath,
   profileFields,
   PROFILE_ENCRYPTION_VERSION,
@@ -28,6 +29,23 @@ let profilesKeyPromise;
 /** profiles 写队列与变更队列（保证串行化，防止并发覆盖） */
 let profilesWriteChain = Promise.resolve();
 let profilesMutationChain = Promise.resolve();
+
+export async function readTransferHistory() {
+  try {
+    const history = JSON.parse(await fs.readFile(transferHistoryPath, 'utf8'));
+    return Array.isArray(history) ? history : [];
+  } catch (error) {
+    if (error.code === 'ENOENT') return [];
+    throw error;
+  }
+}
+
+export async function writeTransferHistory(history) {
+  const entries = Array.isArray(history) ? history.slice(0, 200) : [];
+  await fs.mkdir(path.dirname(transferHistoryPath), { recursive: true });
+  await fs.writeFile(transferHistoryPath, JSON.stringify(entries, null, 2), 'utf8');
+  return entries;
+}
 
 /**
  * 将连接配置归一化为对外安全的公开结构。

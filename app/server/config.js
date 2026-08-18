@@ -36,6 +36,9 @@ export const backgroundPath = process.env.WEBSSH_BACKGROUND_PATH || path.join(AP
 /** 偏好设置文件路径 */
 export const settingsPath = process.env.WEBSSH_SETTINGS_PATH || path.join(APP_ROOT, 'settings.json');
 
+/** 文件传输历史路径 */
+export const transferHistoryPath = process.env.WEBSSH_TRANSFER_HISTORY_PATH || path.join(APP_ROOT, 'transfer-history.json');
+
 /** 连接配置允许保存的字段白名单（防止冗余/未知字段入库） */
 export const profileFields = ['name', 'host', 'port', 'username', 'authMode', 'password', 'privateKey', 'passphrase', 'pinned'];
 

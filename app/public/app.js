@@ -6,7 +6,6 @@
  * 连接配置（profiles.js）、文件传输（transfers.js）、
  * WebSocket 连接（connections.js）与界面交互（ui.js）。
  */
-import { socketIsOpen } from './js/utils.js?v=26';
 import {
   sessions,
   settingsStore,
@@ -21,7 +20,6 @@ import {
   closeDrawerButton,
   connectionDrawer,
   shutdownConfirmDialog,
-  shutdownConfirmBackdrop,
   profileOverwriteDialog,
   profileOverwriteBackdrop,
   uploadConflictDialog,
@@ -42,8 +40,7 @@ import {
   fontSizeInput,
   fontWeightInput,
   letterSpacingInput,
-  fontColorInput,
-  sessionTabs
+  fontColorInput
 } from './js/dom.js?v=26';
 import {
   loadSettings,

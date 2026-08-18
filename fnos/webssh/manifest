@@ -1,5 +1,5 @@
 appname=webssh
-version=0.1.5
+version=0.1.6
 display_name=${common.display_name}
 desc="${common.desc}"
 source=thirdparty
@@ -16,4 +16,4 @@ service_port=1314
 desktop_uidir=ui
 desktop_applaunchname=webssh.proxy.Application
 install_dep_apps=nodejs_v22
-changelog=Refactored server and frontend into a modular architecture, added an automated test suite and project integrity checks, and refreshed documentation screenshots.
+changelog=Added direct downloads to a user-selected local directory, improved transfer history, and fixed download cleanup and size reporting.

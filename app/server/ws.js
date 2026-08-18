@@ -359,6 +359,17 @@ export function createWebSocketServer(httpServer) {
             if (download.cancelled) return;
             sent += chunk.length;
             send(ws, { type: 'download-chunk', id, data: chunk.toString('base64'), transferred: sent, size: stats.size });
+            // 浏览器本地落盘较慢时暂停 SFTP 读取，避免 WebSocket 缓冲无限堆积。
+            if (ws.bufferedAmount > 4 * 1024 * 1024) {
+              stream.pause();
+              const resumeWhenDrained = () => {
+                if (download.cancelled) return;
+                if (ws.readyState !== ws.OPEN) return stream.destroy();
+                if (ws.bufferedAmount > 1024 * 1024) return setTimeout(resumeWhenDrained, 25);
+                stream.resume();
+              };
+              setTimeout(resumeWhenDrained, 25);
+            }
           });
           stream.on('end', () => {
             downloads.delete(id);

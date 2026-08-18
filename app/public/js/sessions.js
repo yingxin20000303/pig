@@ -7,7 +7,7 @@
 import { Terminal } from '../vendor/xterm.js?v=26';
 import { FitAddon } from '../vendor/addon-fit.js?v=26';
 import { TAB_DRAG_THRESHOLD } from './constants.js?v=26';
-import { generateUUID, clearChildren, socketIsOpen, socketIsConnecting } from './utils.js?v=26';
+import { generateUUID, clearChildren, socketIsOpen, socketIsConnecting, isSafari } from './utils.js?v=26';
 import {
   sessions,
   activeSessionId,
@@ -31,7 +31,7 @@ import {
 import { buildTerminalTheme, updateSettings } from './settings.js?v=26';
 import { reconnectSession } from './connections.js?v=26';
 import { connectPending, isPinnedSession } from './profiles.js?v=26';
-import { prepareEditSession, showTerminalContextMenu } from './ui.js?v=26';
+import { prepareEditSession, showTerminalContextMenu, pasteToTerminal } from './ui.js?v=26';
 import { closeFilePicker, closeUploadPicker } from './transfers.js?v=26';
 
 /**
@@ -152,6 +152,11 @@ export function closeSession(id) {
   const remainingIds = [...sessions.keys()].filter((sessionId) => sessionId !== id);
   session.manuallyClosed = true;
   clearTimeout(session.reconnectTimer);
+  session.downloads.forEach((download) => {
+    download.cancelled = true;
+    void download.writable?.abort().catch(() => {});
+  });
+  session.downloads.clear();
   session.socket.close?.();
   session.terminal.dispose();
   session.host.remove();
@@ -207,7 +212,11 @@ export function createSession(label = '新会话') {
   mount.addEventListener('contextmenu', (event) => {
     event.preventDefault();
     if (!session.connected || !socketIsOpen(session.socket)) return;
-    showTerminalContextMenu(event.clientX, event.clientY, session);
+    if (isSafari()) {
+      showTerminalContextMenu(event.clientX, event.clientY, session);
+      return;
+    }
+    pasteToTerminal(session);
   });
   tab.addEventListener('click', (event) => {
     if (suppressNextTabClick) { setSuppressNextTabClick(false); return; }

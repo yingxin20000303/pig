@@ -45,6 +45,7 @@ New-Item -ItemType Directory -Force -Path $outputRoot, $runtimeRoot | Out-Null
 
 Copy-Item $nodeSource (Join-Path $runtimeRoot 'node.exe')
 Copy-Item (Join-Path $appRoot 'server.js'), (Join-Path $appRoot 'launch-browser.js'), (Join-Path $appRoot 'package.json') -Destination $outputRoot
+Copy-Item (Join-Path $appRoot 'server') -Destination (Join-Path $outputRoot 'server') -Recurse
 # 连接配置和 AES-256-GCM 密钥均由服务首次保存时创建，避免发布包含初始明文配置。
 Copy-Item (Join-Path $appRoot 'public') -Destination $outputRoot -Recurse
 # 本地上传目录可能包含用户自定义背景图，发布包不应携带运行时数据。

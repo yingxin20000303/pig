@@ -21,7 +21,7 @@ export function setActiveSessionId(id) { activeSessionId = id; }
 /** 所有文件传输任务：id -> 任务对象 */
 export const transfers = new Map();
 
-/** 文件选择器/上传的挂起请求：requestId -> 状态对象 */
+/** 文件选择器的挂起请求：picker -> { requestId, sessionId, directory } */
 export const pickerRequests = new Map();
 
 /** 已保存的连接配置数组（从后端加载） */
@@ -127,15 +127,3 @@ export let terminalContextHintTimer = null;
  * @param {ReturnType<typeof setTimeout> | null} timer 定时器句柄
  */
 export function setTerminalContextHintTimer(timer) { terminalContextHintTimer = timer; }
-
-/** 浏览器下载队列（多文件串行下载） */
-export const browserDownloadQueue = [];
-
-/** 浏览器下载队列是否正在处理中 */
-export let browserDownloadActive = false;
-
-/**
- * 设置浏览器下载队列处理中标记。
- * @param {boolean} value 是否处理中
- */
-export function setBrowserDownloadActive(value) { browserDownloadActive = value; }

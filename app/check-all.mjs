@@ -101,13 +101,27 @@ for (const file of allFiles) {
 }
 console.log('✔ 模块引用：所有 import/export 一致');
 
-// 3) 前端打包验证（esbuild 可选）
-const bundle = spawnSync('npx', ['--yes', 'esbuild', path.join(appDir, 'public/app.js'), '--bundle', '--format=esm', '--outfile=/dev/null', '--log-level=warning'], { encoding: 'utf8', cwd: appDir });
-if (bundle.status === 0) {
-  console.log('✔ 打包验证：前端模块图可完整解析');
-} else {
-  console.error(`✘ 打包验证失败\n${bundle.stdout}\n${bundle.stderr}`);
-  errors++;
+// 3) 前端打包验证（esbuild 已安装时执行）
+let esbuild;
+try {
+  esbuild = await import('esbuild');
+} catch {
+  console.log('○ 打包验证：未安装 esbuild，已跳过');
+}
+if (esbuild) {
+  try {
+    await esbuild.build({
+      entryPoints: [path.join(appDir, 'public/app.js')],
+      bundle: true,
+      format: 'esm',
+      write: false,
+      logLevel: 'warning'
+    });
+    console.log('✔ 打包验证：前端模块图可完整解析');
+  } catch (error) {
+    console.error(`✘ 打包验证失败\n${error.message}`);
+    errors++;
+  }
 }
 
 if (errors > 0) {

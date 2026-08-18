@@ -4,7 +4,7 @@
 将 WebSSH 打包为飞牛 fnOS 原生应用 FPK（不依赖 Docker，纯 JS 依赖，兼容 x86/ARM）。
 
 .DESCRIPTION
-1. 将 app/ 下的 server.js / public / package.json 复制到 fnos/webssh/app/server；
+1. 将 app/ 下的 server.js / server / public / package.json 复制到 fnos/webssh/app/server；
 2. 复制 node_modules 并剔除需要原生编译的可选模块（cpu-features/nan/buildcheck 等），
    使依赖保持纯 JS，可在 x86 与 ARM 上直接运行；
 3. 调用飞牛官方 fnpack 工具执行 build 生成 .fpk。
@@ -67,6 +67,7 @@ function Copy-AppServer {
 
     Write-Host '复制应用代码...'
     Copy-Item (Join-Path $appRoot 'server.js') $serverRoot
+    Copy-Item (Join-Path $appRoot 'server') -Destination (Join-Path $serverRoot 'server') -Recurse
     Copy-Item (Join-Path $appRoot 'package.json') $serverRoot
     Copy-Item (Join-Path $appRoot 'package-lock.json') $serverRoot
     Copy-Item (Join-Path $appRoot 'public') (Join-Path $serverRoot 'public') -Recurse

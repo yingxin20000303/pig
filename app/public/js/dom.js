@@ -71,6 +71,13 @@ export const connectionHealth = document.querySelector('#connection-health');
 export const sessionTabs = document.querySelector('#session-tabs');
 export const newSessionButton = document.querySelector('#new-session-button');
 export const transferPanel = document.querySelector('#transfer-panel');
+export const transferHistoryButton = document.querySelector('#transfer-history-button');
+export const transferHistoryBackdrop = document.querySelector('#transfer-history-backdrop');
+export const transferHistoryDialog = document.querySelector('#transfer-history-dialog');
+export const transferHistoryList = document.querySelector('#transfer-history-list');
+export const closeTransferHistoryButton = document.querySelector('#close-transfer-history-button');
+export const transferHistorySearch = document.querySelector('#transfer-history-search');
+export const clearTransferHistoryButton = document.querySelector('#clear-transfer-history-button');
 
 /** 工具栏按钮与输入 */
 export const themeButton = document.querySelector('#theme-button');

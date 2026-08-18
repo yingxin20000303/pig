@@ -18,7 +18,9 @@ import {
   readBackground,
   clampSetting,
   readSettings,
-  validateBackgroundImage
+  validateBackgroundImage,
+  readTransferHistory,
+  writeTransferHistory
 } from './store.js';
 import { isTrustedMutationOrigin } from './security.js';
 
@@ -36,6 +38,22 @@ export function applyApiRoutes(app, deps) {
     if (['GET', 'HEAD', 'OPTIONS'].includes(request.method)) return next();
     if (isTrustedMutationOrigin(request)) return next();
     response.status(403).json({ message: '请求来源不受信任。' });
+  });
+
+  app.get('/api/transfer-history', async (_request, response) => {
+    try {
+      response.json(await readTransferHistory());
+    } catch {
+      response.status(500).json({ message: '无法读取传输历史。' });
+    }
+  });
+
+  app.put('/api/transfer-history', express.json({ limit: '1mb' }), async (request, response) => {
+    try {
+      response.json(await writeTransferHistory(request.body));
+    } catch {
+      response.status(500).json({ message: '无法保存传输历史。' });
+    }
   });
 
   // —— 连接配置（profiles）——

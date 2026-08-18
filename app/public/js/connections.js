@@ -10,10 +10,7 @@ import {
   activeSessionId,
   authMode,
   transfers,
-  pickerRequests,
-  browserDownloadQueue,
-  browserDownloadActive,
-  setBrowserDownloadActive
+  pickerRequests
 } from './state.js?v=26';
 import {
   updateTransfer,
@@ -79,57 +76,44 @@ export function establishConnection(session, values) {
     }
     if (message.type === 'file-list') renderFileList(session, message);
     if (message.type === 'download-start') {
-      const download = session.downloads.get(message.id) || {};
-      session.downloads.set(message.id, { ...download, name: message.name, size: Number(message.size), chunks: [], writeChain: Promise.resolve(), writablePromise: undefined, writtenBytes: 0 });
-      updateTransfer(message.id, { direction: 'download', name: message.name, size: message.size, transferred: 0 });
+      const download = session.downloads.get(message.id);
+      if (!download?.writable) return;
+      session.downloads.set(message.id, { ...download, name: message.name, size: Number(message.size), cancelled: false });
+      updateTransfer(message.id, { direction: 'download', name: message.name, size: message.size, transferred: 0, finalizing: false, location: download.directoryHandle.name, server: session.connection?.name || session.connection?.host || '服务器未知' });
     }
     if (message.type === 'download-chunk') {
       const download = session.downloads.get(message.id);
-      if (!download) return;
+      if (!download || download.cancelled || !download.writable) return;
       const bytes = Uint8Array.from(atob(message.data), (character) => character.charCodeAt(0));
-      if (download.saveHandle) {
-        // Chrome File System Access API：边下载边流式写入，避免大文件全部驻留内存
-        download.writtenBytes = (download.writtenBytes || 0) + bytes.length;
-        if (!download.writablePromise) {
-          download.writablePromise = download.saveHandle.createWritable().catch(() => null);
-        }
-        download.writeChain = download.writeChain.then(() => download.writablePromise).then((writable) => writable?.write(bytes)).catch(() => {});
-      } else {
-        // 无 saveHandle（Safari 等）：立即解码存储，避免 base64 与解码后双份驻留内存
-        download.chunks.push(bytes);
-      }
-      updateTransfer(message.id, { transferred: message.transferred, size: message.size });
+      download.writeChain = download.writeChain.then(async () => {
+        if (download.cancelled) return;
+        await download.writable.write(bytes);
+        download.written += bytes.byteLength;
+        updateTransfer(message.id, { transferred: message.transferred, size: message.size });
+      }).catch(async (error) => {
+        if (download.cancelled) return;
+        download.cancelled = true;
+        session.downloads.delete(message.id);
+        try { await download.writable.abort(); } catch { /* 写入失败后忽略中止错误 */ }
+        if (socketIsOpen(session.socket)) session.socket.send(JSON.stringify({ type: 'cancel-transfer', id: message.id }));
+        updateTransfer(message.id, { finalizing: false, error: `下载文件未保存：${error.message}` });
+      });
     }
     if (message.type === 'download-complete') {
       const download = session.downloads.get(message.id);
       if (!download) return;
+      updateTransfer(message.id, { transferred: download.size, size: download.size, finalizing: true });
       try {
-        if (download.saveHandle) {
-          await download.writeChain;
-          const writable = await download.writablePromise;
-          if (!writable) throw new Error('无法打开文件写入流。');
-          await writable.close();
-          if (download.writtenBytes !== Number(download.size)) {
-            updateTransfer(message.id, { error: `下载文件未保存：文件大小校验失败，应为 ${formatBytes(download.size)}，实际为 ${formatBytes(download.writtenBytes)}。` });
-            return;
-          }
-          session.downloads.delete(message.id);
-          updateTransfer(message.id, { done: true, saveLocation: '已保存到您选择的位置' });
-        } else {
-          const blob = new Blob(download.chunks);
-          if (blob.size !== Number(download.size)) {
-            session.downloads.delete(message.id);
-            updateTransfer(message.id, { error: `下载文件未保存：文件大小校验失败，应为 ${formatBytes(download.size)}，实际为 ${formatBytes(blob.size)}。` });
-            return;
-          }
-          // 走浏览器下载队列串行触发，避免多文件并发下载被浏览器拦截
-          queueBrowserDownload(blob, download.name);
-          session.downloads.delete(message.id);
-          updateTransfer(message.id, { done: true, saveLocation: undefined });
-        }
+        await download.writeChain;
+        if (download.cancelled) return;
+        if (download.written !== Number(download.size)) throw new Error(`文件大小校验失败，应为 ${formatBytes(download.size)}，实际为 ${formatBytes(download.written)}。`);
+        await download.writable.close();
+        session.downloads.delete(message.id);
+        updateTransfer(message.id, { done: true, finalizing: false, saveLocation: download.directoryHandle.name });
       } catch (error) {
         session.downloads.delete(message.id);
-        updateTransfer(message.id, { error: `下载文件未保存：${error.message}` });
+        try { await download.writable.abort(); } catch { /* 已关闭或写入失败时无需处理 */ }
+        updateTransfer(message.id, { finalizing: false, error: `下载文件未保存：${error.message}` });
       }
     }
     if (message.type === 'upload-ready') {
@@ -200,38 +184,4 @@ export async function startUpload(session, id) {
   if (!session.uploads.has(id) || !socketIsOpen(session.socket)) return;
   session.uploads.delete(id);
   session.socket.send(JSON.stringify({ type: 'upload-end', id }));
-}
-
-/**
- * 浏览器下载队列处理：串行触发下载，间隔 800ms 避免浏览器拦截。
- * @returns {Promise<void>}
- */
-async function processBrowserDownloadQueue() {
-  if (browserDownloadActive) return;
-  setBrowserDownloadActive(true);
-  while (browserDownloadQueue.length) {
-    const { blob, name } = browserDownloadQueue.shift();
-    try {
-      const url = URL.createObjectURL(blob);
-      const link = Object.assign(document.createElement('a'), { href: url, download: name });
-      document.body.append(link);
-      link.click();
-      link.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
-    } catch (error) {
-      console.error('触发浏览器下载失败：', error);
-    }
-    await new Promise((resolve) => setTimeout(resolve, 800));
-  }
-  setBrowserDownloadActive(false);
-}
-
-/**
- * 将文件加入浏览器下载队列（串行下载）。
- * @param {Blob} blob 文件数据
- * @param {string} name 下载文件名
- */
-export function queueBrowserDownload(blob, name) {
-  browserDownloadQueue.push({ blob, name });
-  void processBrowserDownloadQueue();
 }

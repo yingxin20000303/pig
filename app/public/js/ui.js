@@ -318,20 +318,6 @@ function showTerminalContextHint() {
   setTerminalContextHintTimer(setTimeout(() => { terminalContextHint.hidden = true; }, 4000));
 }
 
-/**
- * 查询剪贴板读取权限是否已授予（避免触发系统弹窗）。
- * @returns {Promise<boolean>} 是否已授予
- */
-async function clipboardReadGranted() {
-  if (!navigator.permissions || typeof navigator.permissions.query !== 'function') return true;
-  try {
-    const status = await navigator.permissions.query({ name: 'clipboard-read' });
-    return status.state === 'granted';
-  } catch {
-    return true;
-  }
-}
-
 // —— 事件绑定（抽屉、对话框、右键菜单）——
 closeDrawerButton.addEventListener('click', closeDrawer);
 drawerBackdrop.addEventListener('click', closeDrawer);
@@ -341,43 +327,22 @@ shutdownConfirmBackdrop.addEventListener('click', () => closeShutdownConfirm(fal
 profileOverwriteCancel.addEventListener('click', () => closeProfileOverwrite(false));
 profileOverwriteConfirm.addEventListener('click', () => closeProfileOverwrite(true));
 profileOverwriteBackdrop.addEventListener('click', () => closeProfileOverwrite(false));
-terminalContextPaste.addEventListener('click', async () => {
+export async function pasteToTerminal(session) {
+  if (!session || !session.connected || !socketIsOpen(session.socket)) return;
+  try {
+    if (!navigator.clipboard || typeof navigator.clipboard.readText !== 'function') throw new Error('Clipboard API unavailable');
+    const text = await navigator.clipboard.readText();
+    if (text) session.socket.send(JSON.stringify({ type: 'input', data: text }));
+  } catch {
+    if (isSafari()) showTerminalContextHint();
+    session.terminal.focus();
+  }
+}
+
+terminalContextPaste.addEventListener('click', () => {
   const session = terminalContextSession;
   hideTerminalContextMenu();
-  if (!session || !session.connected || !socketIsOpen(session.socket)) return;
-  // Safari 对 http://127.0.0.1 等非 HTTPS 站点的剪贴板读取授权不持久化，每次调用都会弹系统授权框。
-  // 检测到权限未授予时降级为聚焦终端，引导用户按 ⌘V（xterm 原生键盘粘贴走浏览器 paste 事件，无需任何权限）。
-  const granted = await clipboardReadGranted();
-  if (isSafari() && !granted) {
-    showTerminalContextHint();
-    session.terminal.focus();
-    return;
-  }
-  // click 事件是有效用户激活：优先 Async Clipboard API（Chrome/Firefox 静默，Safari 已授权时静默）
-  if (navigator.clipboard && typeof navigator.clipboard.readText === 'function') {
-    try {
-      const text = await navigator.clipboard.readText();
-      if (text) session.socket.send(JSON.stringify({ type: 'input', data: text }));
-      return;
-    } catch { /* 权限被拒，尝试回退 */ }
-  }
-  // 回退：隐藏 textarea + execCommand('paste')（Chrome/Firefox 有效）
-  const textarea = document.createElement('textarea');
-  textarea.setAttribute('readonly', '');
-  textarea.setAttribute('aria-hidden', 'true');
-  textarea.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0;';
-  document.body.appendChild(textarea);
-  textarea.addEventListener('paste', (e) => {
-    const text = e.clipboardData && typeof e.clipboardData.getData === 'function' ? e.clipboardData.getData('text') : '';
-    textarea.remove();
-    if (text && session.connected && socketIsOpen(session.socket)) session.socket.send(JSON.stringify({ type: 'input', data: text }));
-  });
-  textarea.focus();
-  let execOk = false;
-  try { execOk = document.execCommand('paste'); } catch { execOk = false; }
-  if (!execOk) textarea.remove();
-  const active = activeSession();
-  if (active && active.terminal) active.terminal.focus();
+  pasteToTerminal(session);
 });
 document.addEventListener('click', (event) => {
   if (!terminalContextMenu.hidden && !terminalContextMenu.contains(event.target)) hideTerminalContextMenu();

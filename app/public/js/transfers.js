@@ -41,8 +41,19 @@ import {
   uploadConflictOverwriteButton,
   uploadConflictRenameButton,
   uploadConflictCancelButton,
-  transferPanel
+  transferPanel,
+  transferHistoryButton,
+  transferHistoryBackdrop,
+  transferHistoryDialog,
+  transferHistoryList,
+  closeTransferHistoryButton,
+  transferHistorySearch,
+  clearTransferHistoryButton
 } from './dom.js?v=26';
+
+const TRANSFER_HISTORY_CACHE_KEY = 'webssh-transfer-history';
+let transferHistory = [];
+let transferHistorySaveTimer;
 import { activeSession } from './sessions.js?v=26';
 
 /** 下载文件选择器中已勾选的文件集合 */
@@ -312,7 +323,10 @@ export function removeTransfer(id, element) {
       if (session.downloads.has(id) || session.uploads.has(id)) {
         if (socketIsOpen(session.socket)) session.socket.send(JSON.stringify({ type: 'cancel-transfer', id }));
         const download = session.downloads.get(id);
-        if (download?.writablePromise) void download.writablePromise.then((writable) => { try { writable?.abort?.(); } catch { /* 忽略 */ } });
+        if (download) {
+          download.cancelled = true;
+          void download.writable?.abort().catch(() => {});
+        }
         session.downloads.delete(id);
         session.uploads.delete(id);
         break;
@@ -328,9 +342,129 @@ export function removeTransfer(id, element) {
  * @param {string} id 传输任务 id
  * @param {object} details 需要合并到任务的状态字段
  */
+function renderTransferHistory() {
+  clearChildren(transferHistoryList);
+  const query = transferHistorySearch.value.trim().toLocaleLowerCase();
+  const visibleHistory = query
+    ? transferHistory.filter((item) => [item.name, item.location, item.direction === 'upload' ? '上传' : '下载'].some((value) => String(value || '').toLocaleLowerCase().includes(query)))
+    : transferHistory;
+  if (!visibleHistory.length) {
+    const empty = document.createElement('p');
+    empty.className = 'transfer-history-empty';
+    empty.textContent = query ? '没有匹配的传输记录' : '暂无传输记录';
+    transferHistoryList.append(empty);
+    return;
+  }
+  visibleHistory.forEach((item) => {
+    const row = document.createElement('article');
+    row.className = 'transfer-history-item';
+    const badge = document.createElement('span');
+    badge.className = `transfer-history-badge ${item.direction}`;
+    badge.innerHTML = item.direction === 'upload'
+      ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V4"/><path d="m7 9 5-5 5 5"/><path d="M5 20h14"/></svg><span>上传</span>'
+      : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg><span>下载</span>';
+    const title = document.createElement('strong');
+    title.textContent = item.name;
+    const meta = document.createElement('span');
+    meta.className = 'transfer-history-meta';
+    const time = new Date(item.completedAt).toLocaleString('zh-CN', { hour12: false });
+    meta.textContent = `${formatBytes(item.size)} · 耗时 ${formatTransferDuration(item.durationMs)} · ${time}`;
+    const details = document.createElement('div');
+    details.className = 'transfer-history-details';
+    const location = document.createElement('small');
+    location.className = 'transfer-history-location';
+    location.textContent = item.direction === 'upload' ? `上传至：${item.location}` : `下载到：${item.location}`;
+    location.title = location.textContent;
+    const server = document.createElement('small');
+    server.className = 'transfer-history-server';
+    server.textContent = item.direction === 'upload' ? `上传服务器：${item.server || '服务器未知'}` : `下载服务器：${item.server || '服务器未知'}`;
+    server.title = server.textContent;
+    details.append(location, server);
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'transfer-history-delete icon-button';
+    remove.setAttribute('aria-label', `删除 ${item.name} 的传输记录`);
+    remove.title = '删除记录';
+    remove.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v5M14 11v5"/></svg>';
+    remove.addEventListener('click', () => {
+      transferHistory = transferHistory.filter((entry) => entry.id !== item.id);
+      renderTransferHistory();
+      scheduleTransferHistorySave();
+    });
+    row.append(badge, title, meta, details, remove);
+    transferHistoryList.append(row);
+  });
+}
+
+function persistTransferHistoryLocally() {
+  try { localStorage.setItem(TRANSFER_HISTORY_CACHE_KEY, JSON.stringify(transferHistory)); } catch { /* 本地存储不可用不影响传输 */ }
+}
+
+function scheduleTransferHistorySave() {
+  persistTransferHistoryLocally();
+  clearTimeout(transferHistorySaveTimer);
+  transferHistorySaveTimer = setTimeout(async () => {
+    try {
+      const response = await fetch('/api/transfer-history', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(transferHistory) });
+      if (!response.ok) throw new Error('save-failed');
+    } catch { /* 本地备份已保存，服务恢复后下次变更会自动同步 */ }
+  }, 100);
+}
+
+function formatTransferDuration(durationMs) {
+  const seconds = Math.max(0, Math.round((Number(durationMs) || 0) / 1000));
+  if (seconds < 60) return `${seconds} 秒`;
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes} 分 ${seconds % 60} 秒`;
+}
+
+function addTransferHistory(task) {
+  if (!task?.done || task.error || task.historyRecorded) return;
+  task.historyRecorded = true;
+  transferHistory.unshift({
+    id: task.id,
+    direction: task.direction,
+    name: task.name || '未命名文件',
+    size: Number(task.size) || 0,
+    location: task.location || (task.direction === 'upload' ? '远程位置未知' : '浏览器默认下载目录'),
+    server: task.server || '服务器未知',
+    durationMs: Math.max(0, Date.now() - (task.startedAt || Date.now())),
+    completedAt: new Date().toISOString()
+  });
+  transferHistory = transferHistory.slice(0, 200);
+  renderTransferHistory();
+  scheduleTransferHistorySave();
+}
+
+async function loadTransferHistory() {
+  try {
+    const cached = JSON.parse(localStorage.getItem(TRANSFER_HISTORY_CACHE_KEY) || '[]');
+    if (Array.isArray(cached)) transferHistory = cached;
+  } catch { /* 本地存储不可用时继续读取服务端记录 */ }
+  renderTransferHistory();
+  try {
+    const response = await fetch('/api/transfer-history');
+    if (!response.ok) return;
+    const history = await response.json();
+    if (!Array.isArray(history)) return;
+    const entries = new Map([...transferHistory, ...history].map((item) => [item.id, item]));
+    transferHistory = [...entries.values()].sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt)).slice(0, 200);
+    persistTransferHistoryLocally();
+    renderTransferHistory();
+  } catch { /* 本地备份仍可正常使用 */ }
+}
+
+function closeTransferHistory() {
+  transferHistoryBackdrop.hidden = true;
+  transferHistoryDialog.hidden = true;
+  transferHistoryButton.setAttribute('aria-expanded', 'false');
+}
+
 export function updateTransfer(id, details) {
-  const task = { ...transfers.get(id), ...details };
+  const previousTask = transfers.get(id);
+  const task = { ...previousTask, ...details, id, startedAt: previousTask?.startedAt || Date.now() };
   transfers.set(id, task);
+  if (task.done) addTransferHistory(task);
   let element = transferPanel.querySelector(`[data-transfer-id="${id}"]`);
   if (!element) {
     element = document.createElement('div');
@@ -357,8 +491,9 @@ export function updateTransfer(id, details) {
   const completedMessage = task.direction === 'download'
     ? `下载完成 · 100% · ${task.saveLocation || '保存位置由浏览器下载设置决定'}`
     : `上传完成 · ${formatBytes(task.size || task.transferred || 0)} · 100%`;
-  element.querySelector('.transfer-task-meta').textContent = task.error || (task.done ? `${completedMessage} · ${remainingSeconds} 秒后关闭` : `${task.direction === 'upload' ? '正在上传' : '正在下载'} · ${percent}% · ${formatBytes(task.transferred || 0)}/${formatBytes(task.size || 0)}`);
-  element.querySelector('.transfer-task-progress > span').style.width = `${task.done ? 100 : percent}%`;
+  const inFinalizing = task.direction === 'download' && task.finalizing && !task.done;
+  element.querySelector('.transfer-task-meta').textContent = task.error || (task.done ? `${completedMessage} · ${remainingSeconds} 秒后关闭` : inFinalizing ? `正在保存并合并文件 · 100% · 请勿关闭` : `${task.direction === 'upload' ? '正在上传' : '正在下载'} · ${percent}% · ${formatBytes(task.transferred || 0)}/${formatBytes(task.size || 0)}`);
+  element.querySelector('.transfer-task-progress > span').style.width = `${task.done || inFinalizing ? 100 : percent}%`;
   if (task.done && !task.dismissTimer) {
     task.dismissDeadline = Date.now() + 6000;
     task.dismissTimer = setInterval(() => {
@@ -373,6 +508,23 @@ export function updateTransfer(id, details) {
  * 绑定上传/下载相关控件的事件（由入口模块初始化时调用）。
  */
 export function bindTransferEvents() {
+  void loadTransferHistory();
+  transferHistoryButton.addEventListener('click', () => {
+    renderTransferHistory();
+    transferHistoryBackdrop.hidden = false;
+    transferHistoryDialog.hidden = false;
+    transferHistoryButton.setAttribute('aria-expanded', 'true');
+  });
+  closeTransferHistoryButton.addEventListener('click', closeTransferHistory);
+  transferHistoryBackdrop.addEventListener('click', closeTransferHistory);
+  transferHistorySearch.addEventListener('input', renderTransferHistory);
+  clearTransferHistoryButton.addEventListener('click', () => {
+    if (!transferHistory.length) return;
+    transferHistory = [];
+    renderTransferHistory();
+    scheduleTransferHistorySave();
+  });
+
   // —— 上传 ——
   uploadButton.addEventListener('click', () => {
     if (!activeSession()?.connected) return activeSession()?.terminal.writeln('\r\n\x1b[31m请先连接 SSH 会话。\x1b[0m');
@@ -404,7 +556,7 @@ export function bindTransferEvents() {
     closeUploadPicker();
     for (const file of files) {
       const id = generateUUID();
-      updateTransfer(id, { direction: 'upload', name: file.name, size: file.size, transferred: 0 });
+      updateTransfer(id, { direction: 'upload', name: file.name, size: file.size, transferred: 0, location: directory, server: session.connection?.name || session.connection?.host || '服务器未知' });
       session.uploads.set(id, { file, directory });
       session.socket.send(JSON.stringify({ type: 'upload-start', id, name: file.name, size: file.size, directory }));
     }
@@ -443,29 +595,29 @@ export function bindTransferEvents() {
     const session = activeSession();
     const files = [...selectedDownloadFiles.values()];
     if (!session?.connected || !socketIsOpen(session.socket) || !files.length) return;
+    if (!window.showDirectoryPicker) {
+      session.terminal.writeln('\r\n\x1b[31m当前浏览器不支持直接保存到所选目录，请使用最新版 Chrome 或 Edge。\x1b[0m');
+      return;
+    }
 
     let directoryHandle;
-    if ('showDirectoryPicker' in window) {
-      try {
-        directoryHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
-      } catch (error) {
-        if (error.name === 'AbortError') return;
-      }
+    try {
+      directoryHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    } catch (error) {
+      if (error.name !== 'AbortError') session.terminal.writeln(`\r\n\x1b[31m无法获取本地保存目录：${error.message}\x1b[0m`);
+      return;
     }
 
     for (const file of files) {
       const id = generateUUID();
-      let saveHandle;
-      if (directoryHandle) {
-        try {
-          saveHandle = await directoryHandle.getFileHandle(file.name, { create: true });
-        } catch (error) {
-          updateTransfer(id, { direction: 'download', name: file.name, error: `无法保存到所选目录：${error.message}` });
-          continue;
-        }
+      try {
+        const fileHandle = await directoryHandle.getFileHandle(file.name, { create: true });
+        const writable = await fileHandle.createWritable();
+        session.downloads.set(id, { name: file.name, remotePath: file.path, directoryHandle, writable, written: 0, writeChain: Promise.resolve(), cancelled: false });
+        session.socket.send(JSON.stringify({ type: 'download', id, remotePath: file.path }));
+      } catch (error) {
+        updateTransfer(id, { direction: 'download', name: file.name, error: `无法在所选目录创建文件：${error.message}` });
       }
-      session.downloads.set(id, { name: file.name, chunks: [], saveHandle });
-      session.socket.send(JSON.stringify({ type: 'download', id, remotePath: file.path }));
     }
     closeFilePicker();
   });

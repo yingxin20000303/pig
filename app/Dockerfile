@@ -6,6 +6,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
 COPY server.js ./
+COPY server ./server
 COPY public ./public
 
 RUN mkdir -p /data \

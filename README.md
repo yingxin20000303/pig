@@ -6,7 +6,7 @@
 
 多会话终端 · 连接配置管理 · SFTP 文件传输 · 连接状态监控
 
-[![Version](https://img.shields.io/badge/version-0.1.5-blue?style=flat-square)](https://github.com/yingxin20000303/pig/releases/tag/v0.1.5)
+[![Version](https://img.shields.io/badge/version-0.1.6-blue?style=flat-square)](https://github.com/yingxin20000303/pig/releases/tag/v0.1.6)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Docker%20%7C%20fnOS-orange?style=flat-square)](#-安装与启动)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](https://github.com/yingxin20000303/pig/pulls)
@@ -135,7 +135,7 @@ npm run dev
 1. 点击顶部 **「下载」** 按钮
 2. 输入远程目录并点击 **「读取目录」**；也可双击目录进入或使用上一级图标返回父目录
 3. 勾选需要下载的一个或多个文件，点击底部 **「下载所选文件」**
-4. 浏览器支持目录选择时，仅需选择一次本地目标文件夹，所有选中文件均会保存到该位置；不支持时将保存到浏览器默认下载目录
+4. 在浏览器原生目录选择器中选择本地目标文件夹；所有选中文件会直接保存到该位置，不经过浏览器默认下载目录。此能力需要最新版 Chrome 或 Edge。
 
 ![下载文件对话框](docs/screenshots/07-download-picker.png)
 
